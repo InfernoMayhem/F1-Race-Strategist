@@ -32,14 +32,14 @@ if (form) {
   // adding error styling to the input
     const showError = (el, msg) => {
       el.classList.add("input-error");
-      // Find existing error node immediately after the input
+      // adding or updating error message
       let span = el.nextElementSibling;
       if (!(span && span.classList && span.classList.contains("error-text"))) {
         span = document.createElement("div");
         span.className = "error-text";
         el.insertAdjacentElement("afterend", span);
       }
-      // Remove any duplicate consecutive error nodes after the first
+      // removing any duplicate error messages
       let dup = span.nextElementSibling;
       while (dup && dup.classList && dup.classList.contains("error-text")) {
         const toRemove = dup;
@@ -51,7 +51,7 @@ if (form) {
   // removing error styling from the input
     const clearError = (el) => {
       el.classList.remove("input-error");
-      // Remove all consecutive error nodes after the input
+      // removing all errors once field is valid
       let span = el.nextElementSibling;
       while (span && span.classList && span.classList.contains("error-text")) {
         const toRemove = span;
@@ -162,6 +162,33 @@ if (form) {
       if (results) results.textContent = "Please correct the highlighted fields.";
       return;
     }
-    if (results) results.textContent = "Results placeholder";
+    // build raceConfig from inputs
+    const raceConfig = {
+      totalLaps: $("totalLaps").value,
+      trackLength: $("trackLength").value,
+      fuelLoad: $("fuelLoad").value,
+      trackType: $("trackType").value,
+      weather: $("weather").value,
+      temperature: $("temperature").value,
+      baseLapTime: $("baseLapTime").value,
+      pitStopLoss: $("pitStopLoss").value,
+    };
+
+    try {
+      const res = await fetch("/api/race-config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(raceConfig),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      // Expose to window for algorithms to use immediately
+      window.raceConfig = data.saved || raceConfig;
+      console.log("Saved raceConfig:", window.raceConfig);
+      if (results) results.textContent = "Results placeholder";
+    } catch (err) {
+      console.error("Failed to save raceConfig", err);
+      if (results) results.textContent = "Failed to save race configuration.";
+    }
   });
 }

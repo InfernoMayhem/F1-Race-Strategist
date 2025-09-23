@@ -1,0 +1,44 @@
+{
+  "configs": [
+    {
+      "totalLaps": "10",
+      "trackLength": "10",
+      "fuelLoad": "10",
+      "trackType": "Permanent",
+      "weather": "Dry",
+      "temperature": "10",
+      "baseLapTime": "100",
+      "pitStopLoss": "30"
+    },
+    {
+      "totalLaps": "10",
+      "trackLength": "10",
+      "fuelLoad": "10",
+      "trackType": "Permanent",
+      "weather": "Dry",
+      "temperature": "10",
+      "baseLapTime": "100",
+      "pitStopLoss": "30"
+    },
+    {
+      "totalLaps": "10",
+      "trackLength": "10",
+      "fuelLoad": "10",
+      "trackType": "Permanent",
+      "weather": "Dry",
+      "temperature": "10",
+      "baseLapTime": "100",
+      "pitStopLoss": "30"
+    },
+    {
+      "totalLaps": "10",
+      "trackLength": "10",
+      "fuelLoad": "10",
+      "trackType": "Permanent",
+      "weather": "Dry",
+      "temperature": "10",
+      "baseLapTime": "100",
+      "pitStopLoss": "30"
+    }
+  ]
+}

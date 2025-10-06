@@ -1,6 +1,5 @@
 // calculateLapTimes.js
-// Computes lap times with exponential tyre degradation and a fuel-load effect.
-// Returns an array of lap time values (seconds) of length totalLaps.
+// returns an array of lap time values for the number of laps
 
 function toNumber(v, fallback) {
   const n = Number(v);
@@ -12,17 +11,7 @@ function toInt(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-/**
- * Calculate lap times using a simple model:
- * - Tyre degradation: cumulative penalty grows exponentially with lap count
- *   tyrePenalty(i) = wearBaseSec * ((1 + wearGrowth) ** i - 1) / wearGrowth
- *   If wearGrowth is 0, it falls back to linear: wearBaseSec * i
- * - Fuel effect: as the race goes on, fuel burns off and the car gets lighter,
- *   which typically makes lap times faster (reduced time). We model this as a
- *   growing time benefit with laps (subtracted from the lap time):
- *   fuelBenefit(i) = fuelPerKgBenefit * (burnPerLapKg * (i - 1))
- *   lapTime(i) = base + tyrePenalty(i) - fuelBenefit(i)
- */
+// calculate lap times using a model:
 function calculateLapTimes(config, params = {}) {
   const totalLaps = toInt(config.totalLaps, 0);
   const baseLapTime = toNumber(config.baseLapTime, 0);

@@ -152,6 +152,35 @@ if (form) {
     if (t && t.id && fields[t.id]) validateField(t.id);
   });
 
+  // helper: simple results renderer
+  const renderResults = (laps) => {
+    const results = $("resultsOutput");
+    if (!results) return;
+    if (!Array.isArray(laps) || laps.length === 0) {
+      results.textContent = "No laps returned.";
+      return;
+    }
+    const n = laps.length;
+    const min = Math.min(...laps);
+    const max = Math.max(...laps);
+    const avg = laps.reduce((a, b) => a + b, 0) / n;
+    // show first 10 laps for quick glance
+    const previewCount = Math.min(10, n);
+    const preview = laps.slice(0, previewCount)
+      .map((t, i) => `Lap ${i + 1}: ${t.toFixed(3)}s`).join("\n");
+
+    results.textContent = [
+      `Total laps: ${n}`,
+      `Min: ${min.toFixed(3)}s  Max: ${max.toFixed(3)}s  Avg: ${avg.toFixed(3)}s`,
+      "",
+      `First ${previewCount} laps:`,
+      preview,
+      "",
+      "All laps:",
+      JSON.stringify(laps)
+    ].join("\n");
+  };
+
   // submit validation
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -185,7 +214,18 @@ if (form) {
       // Expose to window for algorithms to use immediately
       window.raceConfig = data.saved || raceConfig;
       console.log("Saved raceConfig:", window.raceConfig);
-      if (results) results.textContent = "Results placeholder";
+      if (results) results.textContent = "Calculating lap times…";
+
+      // Now calculate laps using the saved config (or latest)
+      const calcRes = await fetch("/api/calculate-laps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(window.raceConfig),
+      });
+      if (!calcRes.ok) throw new Error(`HTTP ${calcRes.status}`);
+      const calcData = await calcRes.json();
+      if (!calcData?.ok) throw new Error("Calculation failed");
+      renderResults(calcData.laps || []);
     } catch (err) {
       console.error("Failed to save raceConfig", err);
       if (results) results.textContent = "Failed to save race configuration.";

@@ -59,6 +59,16 @@
       "temperature": "20",
       "baseLapTime": "90",
       "pitStopLoss": "20"
+    },
+    {
+      "totalLaps": "50",
+      "trackLength": "10",
+      "fuelLoad": "100",
+      "trackType": "Permanent",
+      "weather": "Dry",
+      "temperature": "20",
+      "baseLapTime": "90",
+      "pitStopLoss": "22"
     }
   ]
 }

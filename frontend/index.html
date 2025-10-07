@@ -43,13 +43,9 @@
             <option value="Street">Street</option>
           </select>
 
-          <!-- Weather Condition: Dry, Wet -->
-          <label for="weather">Weather Condition</label>
-          <select id="weather" name="weather">
-            <option value="" disabled selected>Choose a condition</option>
-            <option value="Dry">Dry</option>
-            <option value="Wet">Wet</option>
-          </select>
+          <!-- Total Rainfall over race (mm) -->
+          <label for="totalRainfall">Total Rainfall (mm) <span class="muted">(blank = 0 / dry)</span></label>
+          <input type="text" id="totalRainfall" name="totalRainfall" placeholder="e.g. 12.5" />
 
           <!-- Temperature: Integer (-10 to 50) °C -->
           <label for="temperature">Temperature (°C) <span class="muted">(-10 to 50)</span></label>

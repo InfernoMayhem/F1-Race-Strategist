@@ -92,10 +92,13 @@ if (form) {
       if (!["Permanent", "Hybrid", "Street"].includes(v)) return "Invalid Track Type";
       return "";
     },
-    weather: (el) => {
-      const v = el.value;
-      if (!v) return "Weather is required";
-      if (!["Dry", "Wet"].includes(v)) return "Invalid Weather";
+    totalRainfall: (el) => {
+      const raw = el.value.trim();
+      if (!raw) return ""; // blank means 0 (dry)
+      const n = decimal(raw);
+      if (Number.isNaN(n)) return "Total Rainfall must be a number";
+      if (n < 0) return "Total Rainfall cannot be negative";
+      if (n > 1000) return "Total Rainfall is unrealistically high";
       return "";
     },
     temperature: (el) => {
@@ -197,7 +200,7 @@ if (form) {
       trackLength: $("trackLength").value,
       fuelLoad: $("fuelLoad").value,
       trackType: $("trackType").value,
-      weather: $("weather").value,
+  totalRainfall: $("totalRainfall").value,
       temperature: $("temperature").value,
       baseLapTime: $("baseLapTime").value,
       pitStopLoss: $("pitStopLoss").value,

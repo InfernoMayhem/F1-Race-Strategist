@@ -18,6 +18,7 @@ app.get("/api/hello", (_req, res) => {
 // race config storage
 const { addConfig, getLatest } = require("./models/raceConfigStore");
 const { calculateLapTimes } = require("./models/calculateLapTimes");
+const { generateStrategies } = require("./models/strategyGenerator");
 
 app.post("/api/race-config", (req, res) => {
 	const cfg = req.body || {};
@@ -26,12 +27,17 @@ app.post("/api/race-config", (req, res) => {
 		"trackLength",
 		"fuelLoad",
 		"trackType",
-		"weather",
 		"temperature",
 		"baseLapTime",
 		"pitStopLoss",
+		// totalRainfall is optional (blank=dry) but include key if present.
 	];
 	const missing = required.filter((k) => !(k in cfg));
+	// Backward compatibility: if legacy 'weather' present but no totalRainfall, map it.
+	if (!('totalRainfall' in cfg) && 'weather' in cfg) {
+		if (cfg.weather === 'Wet') cfg.totalRainfall = 50; // arbitrary wet amount
+		else cfg.totalRainfall = 0;
+	}
 	if (missing.length) {
 		return res.status(400).json({ error: "Missing fields", missing });
 	}
@@ -55,6 +61,19 @@ app.post("/api/calculate-laps", (req, res) => {
 	} catch (err) {
 		console.error("calculate-laps error", err);
 		return res.status(500).json({ error: "Failed to calculate laps" });
+	}
+});
+
+// Generate strategies (1/2/3 stop best + sample sets)
+app.post("/api/generate-strategies", (req, res) => {
+	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
+	if (!cfg) return res.status(400).json({ error: "No race config available" });
+	try {
+		const { strategies, best, compounds } = generateStrategies(cfg, {});
+		return res.json({ ok: true, strategies, best });
+	} catch (err) {
+		console.error("generate-strategies error", err);
+		return res.status(500).json({ error: "Failed to generate strategies" });
 	}
 });
 

@@ -9,7 +9,7 @@ const DEFAULT_COMPOUNDS = {
 function toNumber(v, fb) { const n = Number(v); return Number.isFinite(n) ? n : fb; }
 function toInt(v, fb) { const n = parseInt(v, 10); return Number.isFinite(n) ? n : fb; }
 
-// Compute lap time given lap number in race and stint lap index.
+// Compute lap time and degradation factor given lap number in race and stint lap index.
 function lapTime({ baseLapTime, fuelPerKgBenefit, fuelBurnPerLap, lapNumber, stintLapIndex, compoundModel }) {
   // tyre penalty (cumulative) at this stint lap
   const { wearBaseSec, wearGrowth, baseOffset } = compoundModel;
@@ -21,7 +21,8 @@ function lapTime({ baseLapTime, fuelPerKgBenefit, fuelBurnPerLap, lapNumber, sti
   }
   const fuelBurnedKg = fuelBurnPerLap * (lapNumber - 1);
   const fuelBenefit = fuelPerKgBenefit * fuelBurnedKg;
-  return baseLapTime + baseOffset + tyrePenalty - fuelBenefit;
+  const time = baseLapTime + baseOffset + tyrePenalty - fuelBenefit;
+  return { time, tyrePenalty };
 }
 
 function simulateStrategy(config, strategy, compoundModels) {
@@ -33,24 +34,38 @@ function simulateStrategy(config, strategy, compoundModels) {
 
   let currentLap = 1;
   let totalTime = 0;
+  let fastest = null;
   const stints = [];
   for (let s = 0; s < strategy.stints.length; s++) {
     const stint = strategy.stints[s];
     const lapsInStint = stint.laps;
     const compoundModel = compoundModels[stint.compound];
     const lapTimes = [];
+    let lastTyrePenalty = 0;
     for (let i = 1; i <= lapsInStint; i++) {
-      const t = lapTime({ baseLapTime, fuelPerKgBenefit, fuelBurnPerLap, lapNumber: currentLap, stintLapIndex: i, compoundModel });
-      lapTimes.push(Number(t.toFixed(3)));
+      const { time: rawTime, tyrePenalty } = lapTime({ baseLapTime, fuelPerKgBenefit, fuelBurnPerLap, lapNumber: currentLap, stintLapIndex: i, compoundModel });
+      const t = Number(rawTime.toFixed(3));
+      lapTimes.push(t);
       totalTime += t;
+      lastTyrePenalty = tyrePenalty;
+      if (!fastest || t < fastest.time) {
+        fastest = { time: t, globalLap: currentLap, stintIndex: s, lapInStint: i, compound: stint.compound };
+      }
       currentLap++;
     }
-    stints.push({ ...stint, lapTimes });
+    const nominalLife = compoundModel.nominalLife ||
+      (stint.compound === 'Soft' ? 20 :
+       stint.compound === 'Medium' ? 30 :
+       stint.compound === 'Hard' ? 40 :
+       stint.compound === 'Intermediate' ? 35 : 50);
+    const remainingLaps = Math.max(0, nominalLife - lapsInStint);
+    const remainingPct = Number(((remainingLaps / nominalLife) * 100).toFixed(1));
+    stints.push({ ...stint, lapTimes, tyreLifeRemainingPct: remainingPct, nominalLife });
     if (s < strategy.stints.length - 1) {
       totalTime += toNumber(config.pitStopLoss, 0);
     }
   }
-  return { ...strategy, stints, totalTime: Number(totalTime.toFixed(3)) };
+  return { ...strategy, stints, totalTime: Number(totalTime.toFixed(3)), fastestLap: fastest };
 }
 
 function generateStintDistributions(totalLaps, partsCount, minStint) {
@@ -99,7 +114,7 @@ function enumerateCompoundAssignments(stintCount, compoundKeys, requireTwo) {
 function generateStrategies(config, options = {}) {
   const allCompounds = { ...DEFAULT_COMPOUNDS, ...(options.compounds || {}) };
   const totalLaps = toInt(config.totalLaps, 0);
-  if (totalLaps <= 0) return { strategies: [], best: {} };
+  if (totalLaps <= 0) return { best: {} };
   const totalRain = toNumber(config.totalRainfall, 0) || 0;
   const avgRainPerLap = totalLaps > 0 ? totalRain / totalLaps : 0;
 
@@ -120,12 +135,11 @@ function generateStrategies(config, options = {}) {
   // Filter compound models to allowed keys only
   const compoundModels = Object.fromEntries(allowedKeys.map(k => [k, allCompounds[k]]).filter(([,v]) => v));
   const compoundKeys = Object.keys(compoundModels);
-  if (!compoundKeys.length) return { strategies: [], best: {} };
+  if (!compoundKeys.length) return { best: {} };
 
   const minStint = Math.min(5, Math.max(1, Math.floor(totalLaps / 10)));
 
   const targetStops = [1, 2, 3];
-  const allStrategies = [];
   const bestByStops = {};
 
   for (const stops of targetStops) {
@@ -137,20 +151,34 @@ function generateStrategies(config, options = {}) {
       for (const seq of compoundSeqs) {
         const stints = dist.map((laps, i) => ({ stint: i + 1, laps, compound: seq[i] }));
         candidateStrategies.push({ stops, stints });
-        if (candidateStrategies.length > 1000) break; // guard
+        if (candidateStrategies.length > 1000) break;
       }
       if (candidateStrategies.length > 1000) break;
     }
     // simulate each
-    const simulated = candidateStrategies.map((s) => simulateStrategy(config, s, compoundModels));
-    simulated.sort((a, b) => a.totalTime - b.totalTime);
-    if (simulated.length) {
-      bestByStops[stops] = simulated[0];
-      allStrategies.push(...simulated.slice(0, 50));
+    let best = null;
+    for (const candidate of candidateStrategies) {
+      const sim = simulateStrategy(config, candidate, compoundModels);
+      if (!best || sim.totalTime < best.totalTime) best = sim;
     }
+    if (best) bestByStops[stops] = best;
   }
 
-  return { strategies: allStrategies, best: bestByStops, compounds: compoundModels };
+  // choose overall best among available stop counts
+  let overallBest = null;
+  Object.values(bestByStops).forEach(strat => {
+    if (strat && (!overallBest || strat.totalTime < overallBest.totalTime)) overallBest = strat;
+  });
+  if (overallBest) {
+    const pitLaps = [];
+    let cumulative = 0;
+    overallBest.stints.forEach((st, idx) => {
+      cumulative += st.laps;
+      if (idx < overallBest.stints.length - 1) pitLaps.push(cumulative);
+    });
+    overallBest.pitLaps = pitLaps;
+  }
+  return { best: bestByStops, overallBest };
 }
 
 module.exports = { generateStrategies };

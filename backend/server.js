@@ -30,12 +30,10 @@ app.post("/api/race-config", (req, res) => {
 		"temperature",
 		"baseLapTime",
 		"pitStopLoss",
-		// totalRainfall is optional (blank=dry) but include key if present.
 	];
 	const missing = required.filter((k) => !(k in cfg));
-	// Backward compatibility: if legacy 'weather' present but no totalRainfall, map it.
 	if (!('totalRainfall' in cfg) && 'weather' in cfg) {
-		if (cfg.weather === 'Wet') cfg.totalRainfall = 50; // arbitrary wet amount
+		if (cfg.weather === 'Wet') cfg.totalRainfall = 50;
 		else cfg.totalRainfall = 0;
 	}
 	if (missing.length) {
@@ -69,8 +67,8 @@ app.post("/api/generate-strategies", (req, res) => {
 	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
 	if (!cfg) return res.status(400).json({ error: "No race config available" });
 	try {
-		const { strategies, best, compounds } = generateStrategies(cfg, {});
-		return res.json({ ok: true, strategies, best });
+		const { best, overallBest } = generateStrategies(cfg, {});
+		return res.json({ ok: true, best, overallBest });
 	} catch (err) {
 		console.error("generate-strategies error", err);
 		return res.status(500).json({ error: "Failed to generate strategies" });

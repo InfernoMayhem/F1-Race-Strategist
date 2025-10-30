@@ -12,11 +12,7 @@
 </head>
 <body>
   <header class="basic-header">
-    <h1>F1 Strategy Simulator</h1>
-    <div style="margin-top:8px;">
-      <button id="testBtn" class="btn-basic" type="button">Test API</button>
-      <span id="output" style="margin-left:8px; font-size:14px;">&nbsp;</span>
-    </div>
+    <h1><span class="title-accent">F1</span> Race Strategist</h1>
   </header>
 
     <main class="basic-container">
@@ -82,16 +78,7 @@
       <!-- Bottom: Charts spanning full width -->
       <section class="panel panel-chart">
         <h2>Race Chart</h2>
-        <div class="chart-controls" style="margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-          <div>
-            <button id="btnStrat1" class="btn-basic" type="button">1 stop</button>
-            <button id="btnStrat2" class="btn-basic" type="button">2 stops</button>
-            <button id="btnStrat3" class="btn-basic" type="button">3 stops</button>
-          </div>
-          <div id="recommendation" class="muted" style="margin-left:8px;">
-            Recommended: <span id="recommendedLabel">(none)</span>
-          </div>
-        </div>
+        <div class="chart-key"><span class="key-dot"></span> Pit stop</div>
         <div class="charts-row">
           <div class="chart-box">
             <canvas id="lapChart"></canvas>

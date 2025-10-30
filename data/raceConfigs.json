@@ -249,6 +249,36 @@
       "temperature": "20",
       "baseLapTime": "90",
       "pitStopLoss": "20"
+    },
+    {
+      "totalLaps": "50",
+      "trackLength": "5.5",
+      "fuelLoad": "100",
+      "trackType": "Permanent",
+      "totalRainfall": "",
+      "temperature": "20",
+      "baseLapTime": "90",
+      "pitStopLoss": "20"
+    },
+    {
+      "totalLaps": "50",
+      "trackLength": "5.5",
+      "fuelLoad": "100",
+      "trackType": "Permanent",
+      "totalRainfall": "",
+      "temperature": "20",
+      "baseLapTime": "90",
+      "pitStopLoss": "20"
+    },
+    {
+      "totalLaps": "50",
+      "trackLength": "5.5",
+      "fuelLoad": "100",
+      "trackType": "Permanent",
+      "totalRainfall": "",
+      "temperature": "20",
+      "baseLapTime": "90",
+      "pitStopLoss": "20"
     }
   ]
 }

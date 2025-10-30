@@ -7,6 +7,8 @@
   <link rel="stylesheet" href="css/styles.css" />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" content="#ff7a00" />
+  <!-- Chart.js for graphing -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <header class="basic-header">
@@ -18,64 +20,88 @@
   </header>
 
     <main class="basic-container">
-      <!-- Left: Inputs -->
-      <section class="panel">
+      <!-- Left: Inputs (compact) -->
+      <section class="panel panel-setup">
         <h2>Race Setup</h2>
-        <form id="raceForm" class="form-basic" novalidate>
-          <!-- Total Laps: Integer (1-100) -->
-          <label for="totalLaps">Total Laps <span class="muted">(1-100)</span></label>
-          <input type="text" id="totalLaps" name="totalLaps" placeholder="e.g. 52" />
+        <form id="raceForm" class="form-grid" novalidate>
+          <div class="field">
+            <label for="totalLaps">Total Laps</label>
+            <input type="text" id="totalLaps" name="totalLaps" placeholder="1-100" />
+          </div>
+          <div class="field">
+            <label for="fuelLoad">Fuel Load (kg)</label>
+            <input type="text" id="fuelLoad" name="fuelLoad" placeholder="1-150" />
+          </div>
 
-          <!-- Track Length: Float (0.1-99.9) km -->
-          <label for="trackLength">Track Length (km) <span class="muted">(0.1-99.9)</span></label>
-          <input type="text" id="trackLength" name="trackLength" placeholder="e.g. 5.4" />
+          <div class="field">
+            <label for="trackLength">Track Length (km)</label>
+            <input type="text" id="trackLength" name="trackLength" placeholder="0.1-99.9" />
+          </div>
+          <div class="field">
+            <label for="baseLapTime">Base Lap Time (s)</label>
+            <input type="text" id="baseLapTime" name="baseLapTime" placeholder="1-300" />
+          </div>
 
-          <!-- Fuel Load: Integer (1-150) kg -->
-          <label for="fuelLoad">Fuel Load (kg) <span class="muted">(1-150)</span></label>
-          <input type="text" id="fuelLoad" name="fuelLoad" placeholder="e.g. 105" />
+          <div class="field">
+            <label for="temperature">Temperature (°C)</label>
+            <input type="text" id="temperature" name="temperature" placeholder="-10 to 50" />
+          </div>
+          <div class="field">
+            <label for="pitStopLoss">Pit Stop Loss (s)</label>
+            <input type="text" id="pitStopLoss" name="pitStopLoss" placeholder="1-60" />
+          </div>
 
-          <!-- Track Type: Permanent, Hybrid, Street -->
-          <label for="trackType">Track Type</label>
-          <select id="trackType" name="trackType">
-            <option value="" disabled selected>Choose a type</option>
-            <option value="Permanent">Permanent</option>
-            <option value="Hybrid">Hybrid</option>
-            <option value="Street">Street</option>
-          </select>
+          <div class="field">
+            <label for="trackType">Track Type</label>
+            <select id="trackType" name="trackType">
+              <option value="" disabled selected>Choose</option>
+              <option value="Permanent">Permanent</option>
+              <option value="Hybrid">Hybrid</option>
+              <option value="Street">Street</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="totalRainfall">Total Rainfall (mm)</label>
+            <input type="text" id="totalRainfall" name="totalRainfall" placeholder="blank = 0 (dry)" />
+          </div>
 
-          <!-- Total Rainfall over race (mm) -->
-          <label for="totalRainfall">Total Rainfall (mm) <span class="muted">(blank = 0 / dry)</span></label>
-          <input type="text" id="totalRainfall" name="totalRainfall" placeholder="e.g. 12.5" />
-
-          <!-- Temperature: Integer (-10 to 50) °C -->
-          <label for="temperature">Temperature (°C) <span class="muted">(-10 to 50)</span></label>
-          <input type="text" id="temperature" name="temperature" placeholder="e.g. 24" />
-
-          <!-- Base Lap Time: Integer (1-300) seconds -->
-          <label for="baseLapTime">Base Lap Time (s) <span class="muted">(1-300)</span></label>
-          <input type="text" id="baseLapTime" name="baseLapTime" placeholder="e.g. 92" />
-
-          <!-- Pit Stop Loss: Integer (1-60) seconds -->
-          <label for="pitStopLoss">Pit Stop Loss (s) <span class="muted">(1-60)</span></label>
-          <input type="text" id="pitStopLoss" name="pitStopLoss" placeholder="e.g. 22" />
-
-          <button type="submit" class="btn-basic">Run Simulation</button>
+          <div class="field field-span-2" style="margin-top:4px;">
+            <button type="submit" class="btn-basic" style="width:100%;">Run Simulation</button>
+          </div>
         </form>
       </section>
 
       <!-- Center: Chart placeholder -->
-      <section class="panel">
+      <section class="panel panel-chart">
         <h2>Race Chart</h2>
-        <div class="chart-box">[Chart will render here]</div>
+        <div class="chart-controls" style="margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <div>
+            <button id="btnStrat1" class="btn-basic" type="button">1 stop</button>
+            <button id="btnStrat2" class="btn-basic" type="button">2 stops</button>
+            <button id="btnStrat3" class="btn-basic" type="button">3 stops</button>
+          </div>
+          <div id="recommendation" class="muted" style="margin-left:8px;">
+            Recommended: <span id="recommendedLabel">(none)</span>
+          </div>
+        </div>
+        <div class="charts-row">
+          <div class="chart-box">
+            <canvas id="lapChart"></canvas>
+          </div>
+          <div class="chart-box">
+            <canvas id="fuelChart"></canvas>
+          </div>
+          <div class="chart-box">
+            <canvas id="tyreChart"></canvas>
+          </div>
+        </div>
       </section>
 
-      <!-- Right: Results -->
-      <section class="panel">
-        <h2>Results</h2>
-        <pre id="resultsOutput" class="results-pre"></pre>
-      </section>
+      
     </main>
 
+    <!-- Chart.js annotation plugin for pit stop markers -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
     <script src="js/app.js"></script>
   </body>
   </html>

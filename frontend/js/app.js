@@ -155,7 +155,6 @@ if (form) {
     if (t && t.id && fields[t.id]) validateField(t.id);
   });
 
-  // helper: simple results renderer
   const renderResults = (laps) => {
     const results = $("resultsOutput");
     if (!results) return;
@@ -183,6 +182,173 @@ if (form) {
       JSON.stringify(laps)
     ].join("\n");
   };
+
+  // chart rendering
+  let chartLap, chartFuel, chartTyre;
+  let strategiesByStops = {};
+  let recommendedStops = null;
+
+  function registerAnnotation() {
+    try {
+      if (window.ChartAnnotation) Chart.register(window.ChartAnnotation);
+      else if (window['chartjs-plugin-annotation']) Chart.register(window['chartjs-plugin-annotation']);
+    } catch (e) {}
+  }
+
+  function baseOptions(yTitle) {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: false },
+        title: { display: false },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.formattedValue}` } },
+        annotation: { annotations: {} }
+      },
+      scales: {
+        x: { title: { display: true, text: 'Lap' } },
+        y: { title: { display: true, text: yTitle } }
+      }
+    };
+  }
+
+  function ensureCharts() {
+    registerAnnotation();
+    if (!chartLap) {
+      const c1 = document.getElementById('lapChart');
+      if (c1) chartLap = new Chart(c1, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Lap Time (s)') });
+    }
+    if (!chartFuel) {
+      const c2 = document.getElementById('fuelChart');
+      if (c2) chartFuel = new Chart(c2, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Fuel Load (kg)') });
+    }
+    if (!chartTyre) {
+      const c3 = document.getElementById('tyreChart');
+      if (c3) chartTyre = new Chart(c3, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Tyre Wear (s penalty)') });
+    }
+  }
+
+  function renderStrategyCharts(strategy) {
+    ensureCharts();
+    if (!strategy || !chartLap || !chartFuel || !chartTyre) return;
+
+    const series = strategy.lapSeries || [];
+    const labels = series.map(p => p.lap);
+    const lapTimes = series.map(p => p.time);
+    const fuelLoads = series.map(p => p.fuelLoad);
+    const tyreWear = series.map(p => p.tyrePenalty);
+    const pitSet = new Set((strategy.pitLaps || []).map(Number));
+
+    const buildAnnotations = () => {
+      const anns = {};
+      (strategy.pitLaps || []).forEach((lap, i) => {
+        const key = `pit_${i}_${lap}`;
+        anns[key] = {
+          type: 'line',
+          xMin: lap,
+          xMax: lap,
+          borderColor: 'rgba(255,215,64,0.9)',
+          borderWidth: 2,
+          label: { enabled: true, content: 'Pit', position: 'start', backgroundColor: 'rgba(255,215,64,0.15)', color: '#111' },
+          scaleID: 'x'
+        };
+      });
+      return anns;
+    };
+
+    // lap time
+    chartLap.data.labels = labels;
+    chartLap.data.datasets = [{
+      label: 'Lap Time (s)',
+      data: lapTimes,
+      borderColor: '#1976d2',
+      backgroundColor: 'rgba(25,118,210,0.2)',
+      tension: 0.3,
+      fill: false,
+      pointRadius: (ctx) => pitSet.has(labels[ctx.dataIndex]) ? 3 : 0,
+      pointBackgroundColor: '#ffd740',
+      pointBorderColor: '#ffd740'
+    }];
+    chartLap.options.plugins.annotation.annotations = buildAnnotations();
+    chartLap.update();
+
+    // fuel load
+    chartFuel.data.labels = labels;
+    chartFuel.data.datasets = [{
+      label: 'Fuel Load (kg)',
+      data: fuelLoads,
+      borderColor: '#2e7d32',
+      backgroundColor: 'rgba(46,125,50,0.2)',
+      tension: 0.3,
+      fill: false,
+      pointRadius: (ctx) => pitSet.has(labels[ctx.dataIndex]) ? 2 : 0,
+      pointBackgroundColor: '#ffd740',
+      pointBorderColor: '#ffd740'
+    }];
+    chartFuel.options.plugins.annotation.annotations = buildAnnotations();
+    chartFuel.update();
+
+    // tyre wear
+    chartTyre.data.labels = labels;
+    chartTyre.data.datasets = [{
+      label: 'Tyre Wear (s penalty)',
+      data: tyreWear,
+      borderColor: '#c62828',
+      backgroundColor: 'rgba(198,40,40,0.2)',
+      tension: 0.3,
+      fill: false,
+      pointRadius: (ctx) => pitSet.has(labels[ctx.dataIndex]) ? 2 : 0,
+      pointBackgroundColor: '#ffd740',
+      pointBorderColor: '#ffd740'
+    }];
+    chartTyre.options.plugins.annotation.annotations = buildAnnotations();
+    chartTyre.update();
+  }
+
+  function updateRecommendationLabel() {
+    const el = document.getElementById('recommendedLabel');
+    if (!el) return;
+    if (recommendedStops == null) {
+      el.textContent = '(none)';
+    } else if (recommendedStops === 1) {
+      el.textContent = '1 stop';
+    } else {
+      el.textContent = `${recommendedStops} stops`;
+    }
+  }
+
+  async function fetchAndRenderStrategies(config) {
+    try {
+      const res = await fetch('/api/generate-strategies', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config || {})
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      strategiesByStops = data.best || {};
+      recommendedStops = data.overallBest?.stops ?? null;
+      updateRecommendationLabel();
+
+  // default render
+  const strat = data.overallBest || strategiesByStops[3] || strategiesByStops[2] || strategiesByStops[1];
+  renderStrategyCharts(strat);
+    } catch (err) {
+      console.error('Failed to fetch strategies', err);
+    }
+  }
+
+  function wireStrategyButtons() {
+    const b1 = document.getElementById('btnStrat1');
+    const b2 = document.getElementById('btnStrat2');
+    const b3 = document.getElementById('btnStrat3');
+  if (b1) b1.addEventListener('click', () => renderStrategyCharts(strategiesByStops[1]));
+  if (b2) b2.addEventListener('click', () => renderStrategyCharts(strategiesByStops[2]));
+  if (b3) b3.addEventListener('click', () => renderStrategyCharts(strategiesByStops[3]));
+  }
+
+  wireStrategyButtons();
 
   // submit validation
   form.addEventListener("submit", async (e) => {
@@ -229,6 +395,9 @@ if (form) {
       const calcData = await calcRes.json();
       if (!calcData?.ok) throw new Error("Calculation failed");
       renderResults(calcData.laps || []);
+
+      // Get strategies and draw charts
+      await fetchAndRenderStrategies(window.raceConfig);
     } catch (err) {
       console.error("Failed to save raceConfig", err);
       if (results) results.textContent = "Failed to save race configuration.";

@@ -36,16 +36,30 @@ function simulateStrategy(config, strategy, compoundModels) {
   let totalTime = 0;
   let fastest = null;
   const stints = [];
+  const overallLapSeries = [];
   for (let s = 0; s < strategy.stints.length; s++) {
     const stint = strategy.stints[s];
     const lapsInStint = stint.laps;
     const compoundModel = compoundModels[stint.compound];
     const lapTimes = [];
+    const tyrePenalties = [];
+    const fuelLoads = [];
     let lastTyrePenalty = 0;
     for (let i = 1; i <= lapsInStint; i++) {
+      const currentFuelLoad = Math.max(0, fuelLoadKg - fuelBurnPerLap * (currentLap - 1));
       const { time: rawTime, tyrePenalty } = lapTime({ baseLapTime, fuelPerKgBenefit, fuelBurnPerLap, lapNumber: currentLap, stintLapIndex: i, compoundModel });
       const t = Number(rawTime.toFixed(3));
       lapTimes.push(t);
+      tyrePenalties.push(Number(tyrePenalty.toFixed(3)));
+      fuelLoads.push(Number(currentFuelLoad.toFixed(3)));
+      overallLapSeries.push({
+        lap: currentLap,
+        time: t,
+        tyrePenalty: Number(tyrePenalty.toFixed(3)),
+        fuelLoad: Number(currentFuelLoad.toFixed(3)),
+        compound: stint.compound,
+        stintIndex: s,
+      });
       totalTime += t;
       lastTyrePenalty = tyrePenalty;
       if (!fastest || t < fastest.time) {
@@ -60,12 +74,12 @@ function simulateStrategy(config, strategy, compoundModels) {
        stint.compound === 'Intermediate' ? 35 : 50);
     const remainingLaps = Math.max(0, nominalLife - lapsInStint);
     const remainingPct = Number(((remainingLaps / nominalLife) * 100).toFixed(1));
-    stints.push({ ...stint, lapTimes, tyreLifeRemainingPct: remainingPct, nominalLife });
+    stints.push({ ...stint, lapTimes, tyrePenalties, fuelLoads, tyreLifeRemainingPct: remainingPct, nominalLife });
     if (s < strategy.stints.length - 1) {
       totalTime += toNumber(config.pitStopLoss, 0);
     }
   }
-  return { ...strategy, stints, totalTime: Number(totalTime.toFixed(3)), fastestLap: fastest };
+  return { ...strategy, stints, totalTime: Number(totalTime.toFixed(3)), fastestLap: fastest, lapSeries: overallLapSeries };
 }
 
 function generateStintDistributions(totalLaps, partsCount, minStint) {
@@ -161,7 +175,17 @@ function generateStrategies(config, options = {}) {
       const sim = simulateStrategy(config, candidate, compoundModels);
       if (!best || sim.totalTime < best.totalTime) best = sim;
     }
-    if (best) bestByStops[stops] = best;
+    if (best) {
+      // compute pit laps for this best strategy
+      const pitLaps = [];
+      let cumulative = 0;
+      best.stints.forEach((st, idx) => {
+        cumulative += st.laps;
+        if (idx < best.stints.length - 1) pitLaps.push(cumulative);
+      });
+      best.pitLaps = pitLaps;
+      bestByStops[stops] = best;
+    }
   }
 
   // choose overall best among available stop counts
@@ -169,15 +193,7 @@ function generateStrategies(config, options = {}) {
   Object.values(bestByStops).forEach(strat => {
     if (strat && (!overallBest || strat.totalTime < overallBest.totalTime)) overallBest = strat;
   });
-  if (overallBest) {
-    const pitLaps = [];
-    let cumulative = 0;
-    overallBest.stints.forEach((st, idx) => {
-      cumulative += st.laps;
-      if (idx < overallBest.stints.length - 1) pitLaps.push(cumulative);
-    });
-    overallBest.pitLaps = pitLaps;
-  }
+  // overallBest already has pitLaps via the loop above
   return { best: bestByStops, overallBest };
 }
 

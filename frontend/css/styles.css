@@ -6,7 +6,7 @@ body{ margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, 
 .basic-header h1{ margin:0; font-size:24px; }
 
 /* layout */
-.basic-container{ display:grid; gap:16px; grid-template-columns: 300px 1fr; padding:16px; }
+.basic-container{ display:grid; gap:16px; grid-template-columns: 320px 1fr; padding:16px; align-items:start; }
 .panel{ background:#3a3a3a; border:1px solid #4a4a4a; border-radius:8px; padding:16px; }
 .panel h2{ margin-top:0; }
 
@@ -25,10 +25,22 @@ body{ margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, 
 .btn-basic:hover{ background:#ff960f; }
 
 /* chart placeholder */
-.panel-chart{ display:flex; flex-direction:column; }
+.panel-chart{ display:flex; flex-direction:column; grid-column: 1 / -1; }
 .charts-row{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; min-height:320px; }
 .chart-box{ min-height:320px; background:#505050; border:1px solid #636363; border-radius:6px; display:flex; align-items:stretch; justify-content:stretch; color:#cfcfcf; overflow:hidden; }
 .chart-box canvas{ width:100% !important; height:100% !important; display:block; }
+
+/* strategy comparison */
+.panel-strategy{ margin-top: 0; }
+.strategy-cards{ display:grid; gap:12px; grid-template-columns: 1fr; }
+.strategy-card{ background:#33393f; border:1px solid #4b5561; border-radius:10px; padding:12px; display:grid; gap:8px; }
+.strategy-card.optimal{ border-color:#ffb300; box-shadow: 0 0 0 2px rgba(255,179,0,0.15) inset; }
+.strategy-card .title{ display:flex; justify-content:space-between; align-items:center; font-weight:600; }
+.strategy-card .pill{ display:inline-block; padding:2px 8px; border-radius:999px; background:#243442; color:#b8d3ff; font-size:12px; border:1px solid #36526a; }
+.strategy-card .pill.opt{ background:#3a2e12; color:#ffd05e; border-color:#6a521d; }
+.strategy-card .meta{ display:flex; gap:14px; font-size:13px; opacity:0.9; }
+.strategy-card .schedule{ display:flex; gap:6px; flex-wrap:wrap; font-size:13px; }
+.strategy-card .schedule .seg{ background:#2f2f2f; padding:4px 6px; border-radius:6px; border:1px solid #444; }
 
 /* results */
 .results-pre{ background:#2b2b2b; border:1px solid #4a4a4a; border-radius:6px; padding:10px; min-height:150px; overflow:auto; }
@@ -37,5 +49,6 @@ body{ margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, 
 @media (max-width: 1000px){
   .basic-container{ grid-template-columns: 1fr; }
   .charts-row{ grid-template-columns: 1fr; }
+  .panel-chart{ grid-column: auto; }
 }
 .results-panel{ padding:12px; }

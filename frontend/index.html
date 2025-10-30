@@ -20,7 +20,7 @@
   </header>
 
     <main class="basic-container">
-      <!-- Left: Inputs (compact) -->
+      <!-- Top Left: Race Setup -->
       <section class="panel panel-setup">
         <h2>Race Setup</h2>
         <form id="raceForm" class="form-grid" novalidate>
@@ -71,7 +71,15 @@
         </form>
       </section>
 
-      <!-- Center: Chart placeholder -->
+      <!-- Top Right: Strategy comparison -->
+      <section class="panel panel-strategy">
+        <h2>Strategy Comparison</h2>
+        <div id="strategyCards" class="strategy-cards">
+          <!-- populated by app.js -->
+        </div>
+      </section>
+
+      <!-- Bottom: Charts spanning full width -->
       <section class="panel panel-chart">
         <h2>Race Chart</h2>
         <div class="chart-controls" style="margin-bottom:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -96,7 +104,6 @@
           </div>
         </div>
       </section>
-
       
     </main>
 

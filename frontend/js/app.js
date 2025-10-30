@@ -318,6 +318,66 @@ if (form) {
     }
   }
 
+  function formatTime(totalSeconds) {
+    if (totalSeconds == null || !isFinite(totalSeconds)) return '—';
+    const ms = Math.round((totalSeconds - Math.floor(totalSeconds)) * 1000);
+    const secs = Math.floor(totalSeconds) % 60;
+    const mins = Math.floor(totalSeconds / 60) % 60;
+    const hrs = Math.floor(totalSeconds / 3600);
+    const pad = (n, z = 2) => String(n).padStart(z, '0');
+    return `${hrs > 0 ? pad(hrs) + ':' : ''}${pad(mins)}:${pad(secs)}.${pad(ms, 3)}`;
+  }
+
+  function buildStintSchedule(strategy) {
+    if (!strategy || !Array.isArray(strategy.stints)) return [];
+    const schedule = [];
+    let lapStart = 1;
+    strategy.stints.forEach((st) => {
+      const len = st.laps || (Array.isArray(st.lapTimes) ? st.lapTimes.length : 0);
+      if (!len) return;
+      const lapEnd = lapStart + len - 1;
+      const compound = st.compound || st.tyre || 'Tyre';
+      schedule.push(`Lap ${lapStart}–${lapEnd}: ${compound}`);
+      lapStart = lapEnd + 1;
+    });
+    return schedule;
+  }
+
+  function renderStrategyCards(bestByStops, overallBest) {
+    const container = document.getElementById('strategyCards');
+    if (!container) return;
+    container.innerHTML = '';
+    const order = [1, 2, 3].filter((n) => bestByStops && bestByStops[n]);
+    order.forEach((stops) => {
+      const s = bestByStops[stops];
+      const isOptimal = overallBest && overallBest.stops === stops;
+      const pitLaps = s.pitLaps || [];
+      const totalTime = s.totalTime;
+      const schedule = buildStintSchedule(s);
+
+      const card = document.createElement('div');
+      card.className = `strategy-card${isOptimal ? ' optimal' : ''}`;
+      card.innerHTML = `
+        <div class="title">
+          <div>${stops} stop${stops === 1 ? '' : 's'}</div>
+          <div>
+            <span class="pill">Pit laps: ${pitLaps.length ? pitLaps.join(', ') : '—'}</span>
+            ${isOptimal ? '<span class="pill opt">Optimal</span>' : ''}
+          </div>
+        </div>
+        <div class="meta"><div>Total time: <strong>${formatTime(totalTime)}</strong></div></div>
+        <div class="schedule">${schedule.map((seg) => `<span class=\"seg\">${seg}</span>`).join('')}</div>
+      `;
+      card.addEventListener('click', () => {
+        renderStrategyCharts(s);
+        // subtle feedback
+        card.style.transform = 'scale(0.99)';
+        setTimeout(() => (card.style.transform = ''), 120);
+      });
+      container.appendChild(card);
+    });
+  }
+
   async function fetchAndRenderStrategies(config) {
     try {
       const res = await fetch('/api/generate-strategies', {
@@ -330,6 +390,7 @@ if (form) {
       strategiesByStops = data.best || {};
       recommendedStops = data.overallBest?.stops ?? null;
       updateRecommendationLabel();
+      renderStrategyCards(strategiesByStops, data.overallBest);
 
   // default render
   const strat = data.overallBest || strategiesByStops[3] || strategiesByStops[2] || strategiesByStops[1];

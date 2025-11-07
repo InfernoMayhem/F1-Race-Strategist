@@ -61,8 +61,10 @@
             <input type="text" id="totalRainfall" name="totalRainfall" placeholder="blank = 0 (dry)" />
           </div>
 
-          <div class="field field-span-2" style="margin-top:4px;">
-            <button type="submit" class="btn-basic" style="width:100%;">Run Simulation</button>
+          <div class="field field-span-2" style="margin-top:4px; display:flex; gap:10px;">
+            <button type="submit" class="btn-basic" style="flex:2;">Run Simulation</button>
+            <button type="button" id="saveConfigBtn" class="btn-basic btn-alt" style="flex:1;">Save Config</button>
+            <button type="button" id="loadConfigBtn" class="btn-basic btn-alt" style="flex:1;">Load Config</button>
           </div>
         </form>
       </section>
@@ -97,5 +99,18 @@
     <!-- Chart.js annotation plugin for pit stop markers -->
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
     <script src="js/app.js"></script>
+
+    <!-- Modal for saving/loading configs -->
+    <div id="configModal" class="modal hidden">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3 id="configModalTitle">Save Configuration</h3>
+          <button class="modal-close" id="closeConfigModal" aria-label="Close">×</button>
+        </div>
+        <div class="modal-body" id="configModalBody">
+          <!-- dynamic content injected by app.js -->
+        </div>
+      </div>
+    </div>
   </body>
   </html>

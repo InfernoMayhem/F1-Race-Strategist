@@ -30,6 +30,7 @@ app.get("/api/hello", (_req, res) => {
 const { addConfig, getLatest } = require("./models/raceConfigStore");
 const { calculateLapTimes } = require("./models/calculateLapTimes");
 const { generateStrategies } = require("./models/strategyGenerator");
+const { saveConfig: dbSaveConfig, listConfigs: dbListConfigs, getConfig: dbGetConfig } = require("./models/configStore");
 
 app.post("/api/race-config", (req, res) => {
 	const cfg = req.body || {};
@@ -83,6 +84,53 @@ app.post("/api/generate-strategies", (req, res) => {
 	} catch (err) {
 		console.error("generate-strategies error", err);
 		return res.status(500).json({ error: "Failed to generate strategies" });
+	}
+});
+
+// Saved Configs API (SQLite)
+// Save a config by name
+app.post("/api/configs", (req, res) => {
+	const { name, config } = req.body || {};
+	if (!name || typeof name !== 'string' || !name.trim()) {
+		return res.status(400).json({ error: 'Name is required' });
+	}
+	if (!config || typeof config !== 'object') {
+		return res.status(400).json({ error: 'Config object is required' });
+	}
+	try {
+		const saved = dbSaveConfig(name.trim(), config);
+		return res.status(201).json({ ok: true, saved });
+	} catch (e) {
+		if (e && e.code === 'EEXIST') {
+			return res.status(409).json({ error: 'A config with that name already exists' });
+		}
+		console.error('Failed to save config', e);
+		return res.status(500).json({ error: 'Failed to save config' });
+	}
+});
+
+// List saved config names
+app.get("/api/configs", (_req, res) => {
+	try {
+		const items = dbListConfigs();
+		return res.json({ ok: true, items });
+	} catch (e) {
+		console.error('Failed to list configs', e);
+		return res.status(500).json({ error: 'Failed to list configs' });
+	}
+});
+
+// Get a specific config by name
+app.get("/api/configs/:name", (req, res) => {
+	const name = req.params.name;
+	if (!name) return res.status(400).json({ error: 'Name required' });
+	try {
+		const item = dbGetConfig(name);
+		if (!item) return res.status(404).json({ error: 'Not found' });
+		return res.json({ ok: true, item });
+	} catch (e) {
+		console.error('Failed to get config', e);
+		return res.status(500).json({ error: 'Failed to get config' });
 	}
 });
 

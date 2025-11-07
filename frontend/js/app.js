@@ -439,12 +439,10 @@ if (form) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      // Expose to window for algorithms to use immediately
       window.raceConfig = data.saved || raceConfig;
       console.log("Saved raceConfig:", window.raceConfig);
       if (results) results.textContent = "Calculating lap times…";
 
-      // Now calculate laps using the saved config (or latest)
       const calcRes = await fetch("/api/calculate-laps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -455,7 +453,7 @@ if (form) {
       if (!calcData?.ok) throw new Error("Calculation failed");
       renderResults(calcData.laps || []);
 
-      // Get strategies and draw charts
+      // get strategies and draw charts
       await fetchAndRenderStrategies(window.raceConfig);
     } catch (err) {
       console.error("Failed to save raceConfig", err);
@@ -463,3 +461,129 @@ if (form) {
     }
   });
 }
+
+// save and load UI
+const saveBtn = document.getElementById('saveConfigBtn');
+const loadBtn = document.getElementById('loadConfigBtn');
+const modal = document.getElementById('configModal');
+const modalTitle = document.getElementById('configModalTitle');
+const modalBody = document.getElementById('configModalBody');
+const modalClose = document.getElementById('closeConfigModal');
+
+function openModal() { if (modal) modal.classList.remove('hidden'); }
+function closeModal() { if (modal) modal.classList.add('hidden'); }
+if (modalClose) modalClose.addEventListener('click', closeModal);
+if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+
+function buildCurrentConfigFromForm() {
+  const f = document.getElementById('raceForm');
+  if (!f) return null;
+  return {
+    totalLaps: document.getElementById('totalLaps')?.value,
+    trackLength: document.getElementById('trackLength')?.value,
+    fuelLoad: document.getElementById('fuelLoad')?.value,
+    trackType: document.getElementById('trackType')?.value,
+    totalRainfall: document.getElementById('totalRainfall')?.value,
+    temperature: document.getElementById('temperature')?.value,
+    baseLapTime: document.getElementById('baseLapTime')?.value,
+    pitStopLoss: document.getElementById('pitStopLoss')?.value,
+  };
+}
+
+function populateFormFromConfig(cfg = {}) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
+  set('totalLaps', cfg.totalLaps);
+  set('trackLength', cfg.trackLength);
+  set('fuelLoad', cfg.fuelLoad);
+  set('trackType', cfg.trackType);
+  set('totalRainfall', cfg.totalRainfall);
+  set('temperature', cfg.temperature);
+  set('baseLapTime', cfg.baseLapTime);
+  set('pitStopLoss', cfg.pitStopLoss);
+}
+
+async function showSaveModal() {
+  if (!modalBody || !modalTitle) return;
+  modalTitle.textContent = 'Save Configuration';
+  modalBody.innerHTML = '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.placeholder = 'Enter a name for this config (e.g. Monza Dry)';
+  input.id = 'saveNameInput';
+  const actions = document.createElement('div');
+  actions.className = 'modal-actions';
+  const cancel = document.createElement('button'); cancel.className = 'btn-basic btn-alt'; cancel.textContent = 'Cancel';
+  const save = document.createElement('button'); save.className = 'btn-basic'; save.textContent = 'Save';
+  actions.append(cancel, save);
+  modalBody.append(input, actions);
+
+  cancel.addEventListener('click', closeModal);
+  save.addEventListener('click', async () => {
+    const name = (document.getElementById('saveNameInput')?.value || '').trim();
+    if (!name) { input.focus(); input.classList.add('input-error'); return; }
+    const cfg = buildCurrentConfigFromForm();
+    try {
+      const res = await fetch('/api/configs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, config: cfg }) });
+      if (res.status === 409) { alert('A config with that name already exists. Choose a different name.'); return; }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      modalBody.innerHTML = '<div class="feedback-text">Saved! You can load it anytime via "Load Config".</div>';
+      setTimeout(closeModal, 800);
+    } catch (e) {
+      console.error('Save failed', e);
+      alert('Failed to save config.');
+    }
+  });
+
+  openModal();
+  setTimeout(() => input.focus(), 50);
+}
+
+function fmtTime(t) { try { const d = new Date(t); return d.toLocaleString(); } catch (_) { return String(t); } }
+
+async function showLoadModal() {
+  if (!modalBody || !modalTitle) return;
+  modalTitle.textContent = 'Load Configuration';
+  modalBody.innerHTML = '';
+  const list = document.createElement('div'); list.className = 'config-list';
+  modalBody.append(list);
+  const actions = document.createElement('div'); actions.className = 'modal-actions';
+  const close = document.createElement('button'); close.className = 'btn-basic btn-alt'; close.textContent = 'Close';
+  actions.append(close); modalBody.append(actions);
+  close.addEventListener('click', closeModal);
+  try {
+    const res = await fetch('/api/configs');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const items = data.items || [];
+    if (!items.length) {
+      const empty = document.createElement('div'); empty.className = 'empty-note'; empty.textContent = 'No saved configurations yet. Save one to see it here.';
+      list.append(empty);
+      return;
+    }
+    items.forEach(item => {
+      const row = document.createElement('div'); row.className = 'config-item';
+      row.innerHTML = `<div class="name">${item.name}</div><div class="time">${fmtTime(item.createdAt)}</div>`;
+      row.addEventListener('click', async () => {
+        try {
+          const r = await fetch(`/api/configs/${encodeURIComponent(item.name)}`);
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+          const payload = await r.json();
+          const cfg = payload?.item?.config || {};
+          populateFormFromConfig(cfg);
+          closeModal();
+        } catch (e) {
+          console.error('Load failed', e);
+          alert('Failed to load config.');
+        }
+      });
+      list.append(row);
+    });
+  } catch (e) {
+    console.error('List failed', e);
+    modalBody.append(Object.assign(document.createElement('div'), { className: 'empty-note', textContent: 'Failed to fetch saved configs.' }));
+  }
+  openModal();
+}
+
+if (saveBtn) saveBtn.addEventListener('click', showSaveModal);
+if (loadBtn) loadBtn.addEventListener('click', showLoadModal);

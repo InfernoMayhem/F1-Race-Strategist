@@ -1,5 +1,19 @@
 const $ = (id) => document.getElementById(id);
 
+// Global title handling state (accessible to save/load modal code)
+const DEFAULT_RACE_SETUP_TITLE = 'Race Setup';
+let currentLoadedConfigName = null; // name of currently loaded saved config (null if none)
+let isPopulatingForm = false; // guard flag while programmatically filling form
+function setRaceSetupTitle(name) {
+  const h = document.getElementById('raceSetupTitle');
+  if (!h) return;
+  if (name && String(name).trim()) {
+    h.textContent = String(name).trim();
+  } else {
+    h.textContent = DEFAULT_RACE_SETUP_TITLE;
+  }
+}
+
 // test API and display result
 const testBtn = $("testBtn");
 if (testBtn) {
@@ -21,6 +35,7 @@ if (testBtn) {
 // form validation and submission
 const form = $("raceForm");
 if (form) {
+
   const integer = (v) => {
     const n = parseInt(String(v).trim(), 10);
     return Number.isFinite(n) ? n : NaN;
@@ -149,10 +164,19 @@ if (form) {
   form.addEventListener("input", (e) => {
     const t = e.target;
     if (t && t.id && fields[t.id]) validateField(t.id);
+    // if user edits while a saved config is loaded, revert title
+    if (!isPopulatingForm && currentLoadedConfigName) {
+      currentLoadedConfigName = null;
+      setRaceSetupTitle();
+    }
   });
   form.addEventListener("change", (e) => {
     const t = e.target;
     if (t && t.id && fields[t.id]) validateField(t.id);
+    if (!isPopulatingForm && currentLoadedConfigName) {
+      currentLoadedConfigName = null;
+      setRaceSetupTitle();
+    }
   });
 
   const renderResults = (laps) => {
@@ -463,17 +487,17 @@ if (form) {
 }
 
 // save and load UI
-const saveBtn = document.getElementById('saveConfigBtn');
-const loadBtn = document.getElementById('loadConfigBtn');
-const modal = document.getElementById('configModal');
-const modalTitle = document.getElementById('configModalTitle');
-const modalBody = document.getElementById('configModalBody');
-const modalClose = document.getElementById('closeConfigModal');
+function getModalEls(){
+  return {
+    modal: document.getElementById('configModal'),
+    modalTitle: document.getElementById('configModalTitle'),
+    modalBody: document.getElementById('configModalBody'),
+    modalClose: document.getElementById('closeConfigModal'),
+  };
+}
 
-function openModal() { if (modal) modal.classList.remove('hidden'); }
-function closeModal() { if (modal) modal.classList.add('hidden'); }
-if (modalClose) modalClose.addEventListener('click', closeModal);
-if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+function openModal() { const { modal } = getModalEls(); if (modal) modal.classList.remove('hidden'); }
+function closeModal() { const { modal } = getModalEls(); if (modal) modal.classList.add('hidden'); }
 
 function buildCurrentConfigFromForm() {
   const f = document.getElementById('raceForm');
@@ -491,6 +515,7 @@ function buildCurrentConfigFromForm() {
 }
 
 function populateFormFromConfig(cfg = {}) {
+  isPopulatingForm = true;
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
   set('totalLaps', cfg.totalLaps);
   set('trackLength', cfg.trackLength);
@@ -500,9 +525,12 @@ function populateFormFromConfig(cfg = {}) {
   set('temperature', cfg.temperature);
   set('baseLapTime', cfg.baseLapTime);
   set('pitStopLoss', cfg.pitStopLoss);
+  // allow a tick for any bound listeners to finish before enabling edits to clear title
+  setTimeout(() => { isPopulatingForm = false; }, 0);
 }
 
 async function showSaveModal() {
+  const { modalBody, modalTitle } = getModalEls();
   if (!modalBody || !modalTitle) return;
   modalTitle.textContent = 'Save Configuration';
   modalBody.innerHTML = '';
@@ -541,6 +569,7 @@ async function showSaveModal() {
 function fmtTime(t) { try { const d = new Date(t); return d.toLocaleString(); } catch (_) { return String(t); } }
 
 async function showLoadModal() {
+  const { modalBody, modalTitle } = getModalEls();
   if (!modalBody || !modalTitle) return;
   modalTitle.textContent = 'Load Configuration';
   modalBody.innerHTML = '';
@@ -570,6 +599,9 @@ async function showLoadModal() {
           const payload = await r.json();
           const cfg = payload?.item?.config || {};
           populateFormFromConfig(cfg);
+          // set the title to the loaded config name and mark as loaded
+          setRaceSetupTitle(item.name);
+          currentLoadedConfigName = item.name;
           closeModal();
         } catch (e) {
           console.error('Load failed', e);
@@ -585,5 +617,12 @@ async function showLoadModal() {
   openModal();
 }
 
-if (saveBtn) saveBtn.addEventListener('click', showSaveModal);
-if (loadBtn) loadBtn.addEventListener('click', showLoadModal);
+document.addEventListener('DOMContentLoaded', () => {
+  const saveBtn = document.getElementById('saveConfigBtn');
+  const loadBtn = document.getElementById('loadConfigBtn');
+  const { modal, modalClose } = getModalEls();
+  if (modalClose) modalClose.addEventListener('click', closeModal);
+  if (modal) modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  if (saveBtn) saveBtn.addEventListener('click', showSaveModal);
+  if (loadBtn) loadBtn.addEventListener('click', showLoadModal);
+});

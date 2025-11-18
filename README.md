@@ -11,19 +11,28 @@ An interactive F1 race strategy sandbox. Enter race parameters (laps, fuel load,
 
 ## Getting Started
 
-Install dependencies (includes SQLite driver `better-sqlite3`):
+Install dependencies (includes SQLite driver `better-sqlite3` and Vite + React):
 
 ```sh
 npm install
 ```
 
-Run the backend (serves frontend & APIs). It will auto-fallback to the next port if the default (5000) is busy:
+Development (run backend + Vite dev server with proxy to /api):
 
 ```sh
-npm start
+npm run dev
 ```
 
-Then open your browser at the printed port (e.g. http://localhost:5001).
+This starts:
+- Backend on http://localhost:5000 (auto-fallback if busy)
+- Vite dev on http://localhost:5173 (proxies /api to the backend)
+
+Alternatively, run them separately:
+
+```sh
+npm run dev:server
+npm run dev:client
+```
 
 ## Saving a Configuration
 1. Fill out the race setup form.

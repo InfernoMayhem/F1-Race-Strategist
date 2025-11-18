@@ -7,13 +7,16 @@
   <link rel="stylesheet" href="css/styles.css" />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" content="#ff7a00" />
-  <!-- Chart.js for graphing -->
+  <!-- Chart.js for graphing (kept via CDN for now) -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <header class="basic-header">
     <h1><span class="title-accent">F1</span> Race Strategist</h1>
   </header>
+
+  <!-- React root for incremental migration -->
+  <div id="root"></div>
 
     <main class="basic-container">
       <!-- Top Left: Race Setup -->
@@ -96,11 +99,14 @@
       
     </main>
 
-    <!-- Chart.js annotation plugin for pit stop markers -->
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
-    <script src="js/app.js"></script>
+  <!-- Chart.js annotation plugin for pit stop markers -->
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
+  <!-- Legacy app logic (form handling, charts, strategies) -->
+  <script src="js/app.js"></script>
+  <!-- React entrypoint (Vite) for incremental migration -->
+  <script type="module" src="/src/main.jsx"></script>
 
-    <!-- Modal for saving/loading configs -->
+  <!-- Modal for saving/loading configs -->
     <div id="configModal" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">

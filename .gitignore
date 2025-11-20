@@ -1,2 +1,5 @@
 node_modules/
 *.log
+
+# ignore deprecated python optimiser folder (no longer used)
+python_optimizer/

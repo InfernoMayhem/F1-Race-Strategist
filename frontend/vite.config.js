@@ -11,7 +11,7 @@ export default defineConfig({
     strictPort: false,
     proxy: {
       '/api': {
-        target: 'http://localhost:5000', // backend dev server; set PORT=5000 when running dev:server
+        target: 'http://localhost:5500', // backend dev server default changed to 5500
         changeOrigin: true,
       },
     },

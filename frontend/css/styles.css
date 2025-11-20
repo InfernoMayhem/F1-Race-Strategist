@@ -39,13 +39,14 @@ body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, 
 /* chart placeholder */
 .panel-chart{ display:flex; flex-direction:column; grid-column: 1 / -1; }
 .viewing-label{ margin-bottom:10px; display:flex; gap:6px; align-items:center; opacity:0.9; }
-.charts-row{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; min-height:320px; }
-.chart-box{ min-height:320px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); border-radius:14px; display:flex; align-items:stretch; justify-content:stretch; color:#cfcfcf; overflow:hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.charts-row{ display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; min-height:240px; }
+.chart-box{ min-height:240px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.14); border-radius:14px; display:flex; align-items:stretch; justify-content:stretch; color:#cfcfcf; overflow:hidden; box-shadow: 0 8px 22px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .chart-box canvas{ width:100% !important; height:100% !important; display:block; }
 
 /* strategy comparison */
 .panel-strategy{ margin-top: 0; }
 .strategy-cards{ display:grid; gap:12px; grid-template-columns: 1fr; }
+.strategy-status{ font-size:13px; opacity:0.85; margin: 6px 0 10px; }
 .strategy-card{ background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12); border-radius:14px; padding:12px; display:grid; gap:8px; transition: box-shadow .2s, transform .08s, border-color .2s; box-shadow: 0 10px 26px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 .strategy-card:hover{ transform: translateY(-1px); box-shadow: 0 14px 34px rgba(0,0,0,0.35); }
 .strategy-card.selected{ border-color:#ff8a00; box-shadow: 0 0 0 2px rgba(255,138,0,0.2) inset, 0 14px 34px rgba(0,0,0,0.4); }
@@ -90,3 +91,11 @@ body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, 
 .config-item .time{ font-size:12px; opacity:0.75; }
 .empty-note{ font-size:13px; opacity:0.8; padding:4px 2px; }
 .feedback-text{ font-size:13px; font-weight:600; letter-spacing:0.4px; background: linear-gradient(90deg,#ffd05e,#ff8a00,#ff4e8a); -webkit-background-clip:text; background-clip:text; color:transparent; }
+
+/* Loading overlay */
+.loading-overlay{ position: fixed; inset: 0; display:flex; align-items:center; justify-content:center; background: rgba(10,11,15,0.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); z-index: 100; }
+.loading-overlay.hidden{ display:none; }
+.loading-box{ display:flex; flex-direction:column; align-items:center; gap:10px; background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); border-radius:14px; padding:16px 18px; box-shadow: 0 14px 40px rgba(0,0,0,0.5); }
+.spinner{ width:28px; height:28px; border-radius:999px; border: 3px solid rgba(255,255,255,0.18); border-top-color: #ff8a00; animation: spin 0.9s linear infinite; }
+.loading-text{ font-size:13px; opacity:0.95; }
+@keyframes spin{ to { transform: rotate(360deg); } }

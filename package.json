@@ -5,11 +5,11 @@
   "description": "Minimal Express server serving static frontend + test API.",
   "scripts": {
     "start": "node backend/server.js",
-    "dev:server": "PORT=5000 nodemon backend/server.js",
-    "dev:client": "vite",
+  "dev:server": "nodemon backend/server.js",
+    "dev:client": "vite --config frontend/vite.config.js",
     "dev": "concurrently -n server,client -c yellow,cyan \"npm:dev:server\" \"npm:dev:client\"",
-    "build:client": "vite build",
-    "preview:client": "vite preview --port 5173"
+    "build:client": "vite build --config frontend/vite.config.js",
+    "preview:client": "vite preview --config frontend/vite.config.js --port 5173"
   },
   "dependencies": {
     "cors": "^2.8.5",

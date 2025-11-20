@@ -14,6 +14,58 @@ function setRaceSetupTitle(name) {
   }
 }
 
+const DEV_FRONTEND_PORTS = new Set(['5173','5174','4173','4174']);
+const shouldRetryRelativeApi = (() => {
+  if (typeof window === 'undefined' || !window.location) return false;
+  if (window.location.protocol === 'file:') return true;
+  return DEV_FRONTEND_PORTS.has(window.location.port);
+})();
+
+const API_BASE_CANDIDATES = (() => {
+  const bases = [];
+  if (typeof window !== 'undefined' && window.location) {
+    const proto = window.location.protocol;
+    if (proto === 'http:' || proto === 'https:') bases.push('');
+  }
+  for (let port = 5000; port <= 5010; port += 1) {
+    bases.push(`http://localhost:${port}`);
+    bases.push(`http://127.0.0.1:${port}`);
+  }
+  return Array.from(new Set(bases));
+})();
+
+let cachedApiBase = null;
+
+async function apiFetch(path, options = {}) {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  const attemptOrder = [];
+  if (cachedApiBase !== null) attemptOrder.push(cachedApiBase);
+  API_BASE_CANDIDATES.forEach((base) => {
+    if (base !== cachedApiBase) attemptOrder.push(base);
+  });
+  let lastError;
+  for (const base of attemptOrder) {
+    const url = base ? `${base}${normalizedPath}` : normalizedPath;
+    try {
+      const res = await fetch(url, options);
+      if (res.ok) {
+        cachedApiBase = base;
+        return res;
+      }
+      if (base === '' && shouldRetryRelativeApi) {
+        lastError = new Error(`HTTP ${res.status}`);
+        continue;
+      }
+      cachedApiBase = base;
+      return res;
+    } catch (err) {
+      lastError = err;
+    }
+  }
+  if (lastError) throw lastError;
+  throw new Error('Unable to reach backend');
+}
+
 // test API and display result
 const testBtn = $("testBtn");
 if (testBtn) {
@@ -21,7 +73,7 @@ if (testBtn) {
     const out = $("output");
     if (out) out.textContent = "Testing…";
     try {
-      const res = await fetch("/api/hello");
+  const res = await apiFetch("/api/hello");
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       if (out) out.textContent = data?.message || "OK";
@@ -368,18 +420,29 @@ if (form) {
     return schedule;
   }
 
+  function setStrategyStatus(msg) {
+    const el = document.getElementById('strategyStatus');
+    if (el) el.textContent = msg || '';
+  }
+
   function renderStrategyCards(bestByStops, overallBest) {
     const container = document.getElementById('strategyCards');
     if (!container) return;
     container.innerHTML = '';
     const order = [1, 2, 3].filter((n) => bestByStops && bestByStops[n]);
+    if (!order.length) {
+      setStrategyStatus('No strategies found. Try adjusting inputs.');
+      return;
+    }
+    setStrategyStatus('');
     order.forEach((stops) => {
   const s = bestByStops[stops];
   const isSelected = currentStops === stops;
-  const isOptimal = overallBest && overallBest.stops === stops;
+  const isOptimal = overallBest && (overallBest.targetStops === stops || overallBest.actualStops === stops);
       const pitLaps = s.pitLaps || [];
       const totalTime = s.totalTime;
       const schedule = buildStintSchedule(s);
+      const actualStopsInfo = (s.actualStops != null && s.actualStops !== stops) ? `<span class="pill">Actual: ${s.actualStops} stop${s.actualStops===1?'':'s'}</span>` : '';
 
       const card = document.createElement('div');
       card.className = `strategy-card${isSelected ? ' selected' : ''}`;
@@ -388,6 +451,7 @@ if (form) {
           <div>${stops} stop${stops === 1 ? '' : 's'}</div>
           <div>
             <span class="pill">Pit laps: ${pitLaps.length ? pitLaps.join(', ') : '—'}</span>
+            ${actualStopsInfo}
             ${isSelected ? '<span class="pill viewing">Viewing</span>' : ''}
             ${isOptimal ? '<span class="pill opt">Optimal</span>' : ''}
           </div>
@@ -409,9 +473,22 @@ if (form) {
     });
   }
 
+  function showLoading(text){
+    const overlay = document.getElementById('loadingOverlay');
+    const label = document.getElementById('loadingText');
+    if (label && text) label.textContent = text;
+    if (overlay) overlay.classList.remove('hidden');
+  }
+  function hideLoading(){
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) overlay.classList.add('hidden');
+  }
+
   async function fetchAndRenderStrategies(config) {
+    setStrategyStatus('Optimising strategies…');
+    showLoading('Optimising strategies…');
     try {
-      const res = await fetch('/api/generate-strategies', {
+      const res = await apiFetch('/api/generate-strategies', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config || {})
@@ -427,8 +504,12 @@ if (form) {
   const strat = data.overallBest || strategiesByStops[currentStops] || strategiesByStops[3] || strategiesByStops[2] || strategiesByStops[1];
   renderStrategyCharts(strat);
   updateViewingLabel(currentStops);
+      if (!strat) setStrategyStatus('No valid strategies found for these inputs.');
     } catch (err) {
       console.error('Failed to fetch strategies', err);
+      setStrategyStatus('Failed to fetch strategies. Is the backend running?');
+    } finally {
+      hideLoading();
     }
   }
 
@@ -456,7 +537,8 @@ if (form) {
     };
 
     try {
-      const res = await fetch("/api/race-config", {
+      showLoading('Saving and calculating…');
+      const res = await apiFetch("/api/race-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(raceConfig),
@@ -467,7 +549,7 @@ if (form) {
       console.log("Saved raceConfig:", window.raceConfig);
       if (results) results.textContent = "Calculating lap times…";
 
-      const calcRes = await fetch("/api/calculate-laps", {
+      const calcRes = await apiFetch("/api/calculate-laps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(window.raceConfig),
@@ -482,6 +564,8 @@ if (form) {
     } catch (err) {
       console.error("Failed to save raceConfig", err);
       if (results) results.textContent = "Failed to save race configuration.";
+    } finally {
+      hideLoading();
     }
   });
 }
@@ -551,7 +635,7 @@ async function showSaveModal() {
     if (!name) { input.focus(); input.classList.add('input-error'); return; }
     const cfg = buildCurrentConfigFromForm();
     try {
-      const res = await fetch('/api/configs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, config: cfg }) });
+  const res = await apiFetch('/api/configs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, config: cfg }) });
       if (res.status === 409) { alert('A config with that name already exists. Choose a different name.'); return; }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       modalBody.innerHTML = '<div class="feedback-text">Saved! You can load it anytime via "Load Config".</div>';
@@ -580,7 +664,7 @@ async function showLoadModal() {
   actions.append(close); modalBody.append(actions);
   close.addEventListener('click', closeModal);
   try {
-    const res = await fetch('/api/configs');
+  const res = await apiFetch('/api/configs');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const items = data.items || [];
@@ -594,7 +678,7 @@ async function showLoadModal() {
       row.innerHTML = `<div class="name">${item.name}</div><div class="time">${fmtTime(item.createdAt)}</div>`;
       row.addEventListener('click', async () => {
         try {
-          const r = await fetch(`/api/configs/${encodeURIComponent(item.name)}`);
+          const r = await apiFetch(`/api/configs/${encodeURIComponent(item.name)}`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
           const payload = await r.json();
           const cfg = payload?.item?.config || {};

@@ -31,6 +31,8 @@ const { addConfig, getLatest } = require("./models/raceConfigStore");
 const { calculateLapTimes } = require("./models/calculateLapTimes");
 const { generateStrategies } = require("./models/strategyGenerator");
 const { saveConfig: dbSaveConfig, listConfigs: dbListConfigs, getConfig: dbGetConfig } = require("./models/configStore");
+const bruteForce = require("./models/bruteForceOptimizer");
+const strictOpt = require("./models/strictOptimizer");
 
 app.post("/api/race-config", (req, res) => {
 	const cfg = req.body || {};
@@ -79,11 +81,76 @@ app.post("/api/generate-strategies", (req, res) => {
 	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
 	if (!cfg) return res.status(400).json({ error: "No race config available" });
 	try {
-		const { best, overallBest } = generateStrategies(cfg, {});
-		return res.json({ ok: true, best, overallBest });
+		// Optional mode switch: if query ?mode=brute, use brute-force 2-stop optimiser
+		if ((req.query && req.query.mode === 'brute') || (req.body && req.body.mode === 'brute')) {
+			const best = bruteForce.findOptimal(cfg);
+			// Map to existing shape minimally: put under 2-stops key
+			const bestMap = { 2: {
+				stints: best.stints.map((s, i) => ({ stint: i+1, compound: s.compound, laps: s.length })),
+				pitLaps: best.pit_laps,
+				totalTime: best.total_time,
+				lapSeries: best.lapSeries,
+				actualStops: 2,
+				targetStops: 2,
+			}};
+			return res.json({ ok: true, best: bestMap, overallBest: bestMap[2] });
+		}
+			const { best, overallBest } = generateStrategies(cfg, {});
+			if (!overallBest || !best || Object.keys(best).length === 0) {
+				// Fallback: run brute-force 2-stop optimiser to ensure we always return a valid strategy
+				try {
+					const bf = bruteForce.findOptimal(cfg);
+					const map = { 2: {
+						stints: bf.stints.map((s, i) => ({ stint: i+1, compound: s.compound, laps: s.length })),
+						pitLaps: bf.pit_laps,
+						totalTime: bf.total_time,
+						lapSeries: bf.lapSeries,
+						actualStops: 2,
+						targetStops: 2,
+					}};
+					return res.json({ ok: true, best: map, overallBest: map[2], meta: { fallback: 'bruteforce' } });
+				} catch (e) {
+					console.warn('Brute-force fallback failed:', e?.message || e);
+				}
+			}
+			return res.json({ ok: true, best, overallBest });
 	} catch (err) {
 		console.error("generate-strategies error", err);
 		return res.status(500).json({ error: "Failed to generate strategies" });
+	}
+});
+
+// Dedicated brute-force endpoint returning the optimal 2-stop (3-stint) strategy
+app.post("/api/optimise-bruteforce", (req, res) => {
+	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
+	if (!cfg) return res.status(400).json({ error: "No race config available" });
+	try {
+		const best = bruteForce.findOptimal(cfg);
+		return res.json({ ok: true, best });
+	} catch (err) {
+		console.error('optimise-bruteforce error', err);
+		return res.status(500).json({ error: 'Failed to optimise strategy' });
+	}
+});
+
+// Strict optimiser endpoint returning the exact requested JSON format
+app.post("/api/optimise-strict", (req, res) => {
+	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
+	if (!cfg) return res.status(400).json({ error: "No race config available" });
+	try {
+		const params = {
+			totalLaps: cfg.totalLaps,
+			baseLapTime: cfg.baseLapTime,
+			pitStopLoss: cfg.pitStopLoss,
+			// Strict model expects initialFuel and fuelPerKgBenefit; derive from inputs
+			initialFuel: cfg.fuelLoad, // interpreted per spec as initial fuel value
+			fuelPerKgBenefit: 0.005,
+		};
+		const best = strictOpt.optimiseStrict(params);
+		return res.json({ ok: true, best });
+	} catch (err) {
+		console.error('optimise-strict error', err);
+		return res.status(500).json({ error: 'Failed to optimise (strict)', details: err?.message || String(err) });
 	}
 });
 
@@ -134,8 +201,12 @@ app.get("/api/configs/:name", (req, res) => {
 	}
 });
 
-// default to 5000
-const BASE_PORT = Number(process.env.PORT) || 5000;
+// default to 5500 (avoid macOS ControlCenter on 5000) unless PORT explicitly provided
+const requestedPort = process.env.PORT ? Number(process.env.PORT) : null;
+const BASE_PORT = Number.isFinite(requestedPort) && requestedPort > 0 ? requestedPort : 5500;
+// Allow explicit override: if PORT_FALLBACK=1 then still attempt incremental ports even with PORT set.
+const explicitFallbackFlag = process.env.PORT_FALLBACK && process.env.PORT_FALLBACK !== '0';
+const fallbackAttempts = process.env.PORT && !explicitFallbackFlag ? 0 : 20;
 
 // startup that auto-falls back to the next available port(s) if in use
 function startWithFallback(startPort, maxTries = 20) {
@@ -159,6 +230,10 @@ function startWithFallback(startPort, maxTries = 20) {
 			setTimeout(listen, 50);
 			return;
 		}
+		if (err && err.code === "EADDRINUSE") {
+			console.error(`Port ${port} is already in use and automatic fallback is disabled. Set PORT_FALLBACK=1 to auto-select a free port or choose a different PORT.`);
+			process.exit(1);
+		}
 		if (err && err.code === "EACCES") {
 			console.error(`\nERROR: Permission denied for port ${port}. Try a port > 1024 or run without privileged ports.`);
 			process.exit(1);
@@ -169,4 +244,4 @@ function startWithFallback(startPort, maxTries = 20) {
 	listen();
 }
 
-startWithFallback(BASE_PORT);
+startWithFallback(BASE_PORT, fallbackAttempts);

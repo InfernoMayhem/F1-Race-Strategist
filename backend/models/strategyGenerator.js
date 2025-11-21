@@ -87,10 +87,10 @@ function generateStrictStrategies(config) {
   return { best: bestByStops, overallBest, meta: { algorithm: 'strict-exhaustive', variants: Object.keys(bestByStops).length } };
 }
 
-// Compute lap time and degradation factor given lap number in race and stint lap index.
+// compute lap time and degradation factor given lap number in race and stint lap index
 function lapTime({ baseLapTime, fuelPerKgBenefit, fuelBurnPerLap, lapNumber, stintLapIndex, compoundModel, trackDegFactor, maxStintLap, rejectThresholdSec }) {
   const { baseOffset } = compoundModel;
-  const totalLaps = 1000000; // fuelBurnPerLap already computed from real total; keep placeholder here
+  const totalLaps = 1000000; // fuelBurnPerLap already computed from real total
   const fuelLoadKg = fuelBurnPerLap * totalLaps; // makes burnedKg = fuelBurnPerLap*(lap-1) below
   const { time, wearPenalty, invalid } = calcLapTimeWithWear({
     compound: compoundModel.name || 'Medium',
@@ -215,11 +215,12 @@ function enumerateCompoundAssignments(stintCount, compoundKeys, requireTwo) {
   return assignments;
 }
 
-/**
- * Multi-variant dynamic pit optimisation.
- * Produces up to three distinct strategies keyed by pit count using a DP with a maxStops constraint.
- * If fewer than three distinct stop counts are naturally produced, a relaxed MIN_STINT variant fills gaps.
+/*
+  Multi-variant dynamic pit optimisation.
+  Produces up to three distinct strategies keyed by pit count using a DP with a maxStops constraint.
+  If fewer than three distinct stop counts are naturally produced, a relaxed MIN_STINT variant fills gaps.
  */
+
 function generateStrategies(config, options = {}) {
   const allCompounds = { ...DEFAULT_COMPOUNDS, ...(options.compounds || {}) };
   const totalLaps = toInt(config.totalLaps, 0);
@@ -257,7 +258,7 @@ function generateStrategies(config, options = {}) {
     (k==='Soft'?20:k==='Medium'?30:k==='Hard'?40:k==='Intermediate'?35:50)
   ]));
 
-  // Memo lap times to avoid recalculating exponent & fuel terms.
+  // memo lap times to avoid recalculating exponent & fuel terms.
   const maxLifeAll = Math.max(...Object.values(nominalLife));
   const memo = {}; for (const c of compoundKeys){ memo[c] = Array.from({length: totalLaps+2}, () => new Array(maxLifeAll+2).fill(undefined)); }
   function lapTimeFast(comp, lap, age){
@@ -323,11 +324,11 @@ function generateStrategies(config, options = {}) {
     for(const start of compoundKeys){
       const totalTime = solve(1, start, 1, 0);
       const recon = reconstruct(start);
-      // Enforce two-compound rule when applicable (skip pure single-compound strategies)
+      // enforce two-compound rule when applicable
       if (requireTwoCompounds) {
         const used = new Set(recon.stints.map(s => s.compound));
         if (used.size < 2) {
-          // Construct best two-compound 1-stop replacement by enumerating pit lap & second compound.
+          // construct best two-compound 1-stop replacement by enumerating pit lap & second compound.
           const firstComp = recon.stints[0].compound;
           let bestEnum = null;
           for (const alt of compoundKeys) {
@@ -363,9 +364,9 @@ function generateStrategies(config, options = {}) {
   }
 
   const targetStops = [1,2,3];
-  // Helper to capitalise compound name
+  // helper to capitalise compound name
   const cap = (s) => s ? (String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase()) : s;
-  // Build a DP-like strategy object (with lapSeries) from strict best result
+  // build a DP strategy object (with lapSeries) from strict best result
   function buildFromStrict(strictBest){
     if (!strictBest) return null;
     const totalLaps = toInt(config.totalLaps, 0);
@@ -407,7 +408,7 @@ function generateStrategies(config, options = {}) {
     };
   }
 
-  // Compute best per stop count (1,2,3) using DP; fill any missing with strict fallback.
+  // compute best per stop count (1,2,3) using DP, fill any missing with strict fallback.
   const bestByStops = {};
   for (const s of targetStops) {
     let strat = runDPVariant(s);
@@ -432,7 +433,7 @@ function generateStrategies(config, options = {}) {
           fuelPerKgBenefit: 0.005,
         };
         let bestStrict = null;
-        // Evaluate across all pit windows and tyre assignments
+        // evaluate across all pit windows and tyre assignments
         for (let pi=0; pi<pitCombos.length; pi++){
           const pits = pitCombos[pi];
           for (let ci=0; ci<tyreAssignments.length; ci++){
@@ -453,7 +454,7 @@ function generateStrategies(config, options = {}) {
       bestByStops[s] = strat;
     }
   }
-  // Determine overall best among the available ones
+  // determine overall best among the available ones
   let overallBest = null;
   Object.values(bestByStops).forEach((st) => { if (!overallBest || st.totalTime < overallBest.totalTime) overallBest = st; });
   return { best: bestByStops, overallBest, meta: { algorithm:'multi-dp-constrained-wear+strict-fallback', variants: Object.keys(bestByStops).length } };

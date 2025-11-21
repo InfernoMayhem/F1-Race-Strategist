@@ -54,7 +54,6 @@ npm run dev:client
 - `GET /api/configs/:name` – Retrieve a specific saved config.
 
 ## Data Storage
-- Latest ad-hoc config list still written to `data/raceConfigs.json`.
 - Named configs stored in `data/savedConfigs.db` (SQLite, WAL mode for safety & performance).
 
 ## Tech Stack

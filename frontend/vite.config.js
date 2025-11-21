@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
+const backendPort = Number(process.env.BACKEND_PORT || process.env.PORT || 5500);
+
 // Vite is configured with the frontend folder as root.
 export default defineConfig({
   root: __dirname,
@@ -11,7 +13,7 @@ export default defineConfig({
     strictPort: false,
     proxy: {
       '/api': {
-        target: 'http://localhost:5500', // backend dev server default changed to 5500
+        target: `http://localhost:${backendPort}`,
         changeOrigin: true,
       },
     },

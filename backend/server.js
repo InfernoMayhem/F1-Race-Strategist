@@ -1,33 +1,32 @@
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
+const fs = require("fs");
 const http = require("http");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// simple request logger to help debug connectivity/timeouts
+// simple request logger
 app.use((req, res, next) => {
 	try {
 		console.log(new Date().toISOString(), req.method, req.originalUrl);
 	} catch (e) {
-		// ignore logging errors
+		// ignore errors
 	}
 	next();
 });
 
-// define path to frontend static files
-const frontendDir = path.join(__dirname, "..", "frontend");
-app.use(express.static(frontendDir));
+const distDir = path.join(__dirname, "..", "frontend", "dist");
+const serveFrontendFromBackend = process.env.SERVE_FRONTEND === '1' && fs.existsSync(distDir);
 
-// test API button functionality
+// test api button functionality
 app.get("/api/hello", (_req, res) => {
 	res.json({ message: "Backend is working!" });
 });
 
 // race config storage
-const { addConfig, getLatest } = require("./models/raceConfigStore");
 const { calculateLapTimes } = require("./models/calculateLapTimes");
 const { generateStrategies } = require("./models/strategyGenerator");
 const { saveConfig: dbSaveConfig, listConfigs: dbListConfigs, getConfig: dbGetConfig } = require("./models/configStore");
@@ -53,20 +52,13 @@ app.post("/api/race-config", (req, res) => {
 	if (missing.length) {
 		return res.status(400).json({ error: "Missing fields", missing });
 	}
-	const saved = addConfig(cfg);
-	res.status(201).json({ ok: true, saved });
+	res.status(201).json({ ok: true, saved: cfg });
 });
 
-app.get("/api/race-config/latest", (_req, res) => {
-	const latest = getLatest();
-	if (!latest) return res.status(404).json({ error: "No race config found" });
-	res.json({ ok: true, config: latest });
-});
-
-// calculate lap times using the latest saved config, or a config supplied in the body
+// calculate lap times using the config supplied in the body
 app.post("/api/calculate-laps", (req, res) => {
-	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
-	if (!cfg) return res.status(400).json({ error: "No race config available" });
+	const cfg = req.body;
+	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
 	try {
 		const laps = calculateLapTimes(cfg, req.query || {});
 		return res.json({ ok: true, laps });
@@ -78,13 +70,12 @@ app.post("/api/calculate-laps", (req, res) => {
 
 // generate strategies
 app.post("/api/generate-strategies", (req, res) => {
-	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
-	if (!cfg) return res.status(400).json({ error: "No race config available" });
+	const cfg = req.body;
+	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
 	try {
-		// Optional mode switch: if query ?mode=brute, use brute-force 2-stop optimiser
+		// optional mode switch: if query ?mode=brute, use brute-force 2-stop optimiser
 		if ((req.query && req.query.mode === 'brute') || (req.body && req.body.mode === 'brute')) {
 			const best = bruteForce.findOptimal(cfg);
-			// Map to existing shape minimally: put under 2-stops key
 			const bestMap = { 2: {
 				stints: best.stints.map((s, i) => ({ stint: i+1, compound: s.compound, laps: s.length })),
 				pitLaps: best.pit_laps,
@@ -97,7 +88,7 @@ app.post("/api/generate-strategies", (req, res) => {
 		}
 			const { best, overallBest } = generateStrategies(cfg, {});
 			if (!overallBest || !best || Object.keys(best).length === 0) {
-				// Fallback: run brute-force 2-stop optimiser to ensure we always return a valid strategy
+				// fallback: run brute-force 2-stop optimiser to ensure we always return a valid strategy
 				try {
 					const bf = bruteForce.findOptimal(cfg);
 					const map = { 2: {
@@ -120,10 +111,10 @@ app.post("/api/generate-strategies", (req, res) => {
 	}
 });
 
-// Dedicated brute-force endpoint returning the optimal 2-stop (3-stint) strategy
+// dedicated brute-force endpoint returning the optimal 2-stop (3-stint) strategy
 app.post("/api/optimise-bruteforce", (req, res) => {
-	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
-	if (!cfg) return res.status(400).json({ error: "No race config available" });
+	const cfg = req.body;
+	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
 	try {
 		const best = bruteForce.findOptimal(cfg);
 		return res.json({ ok: true, best });
@@ -133,16 +124,16 @@ app.post("/api/optimise-bruteforce", (req, res) => {
 	}
 });
 
-// Strict optimiser endpoint returning the exact requested JSON format
+// strict optimiser endpoint
 app.post("/api/optimise-strict", (req, res) => {
-	const cfg = Object.keys(req.body || {}).length ? req.body : getLatest();
-	if (!cfg) return res.status(400).json({ error: "No race config available" });
+	const cfg = req.body;
+	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
 	try {
 		const params = {
 			totalLaps: cfg.totalLaps,
 			baseLapTime: cfg.baseLapTime,
 			pitStopLoss: cfg.pitStopLoss,
-			// Strict model expects initialFuel and fuelPerKgBenefit; derive from inputs
+			// strict model expects initialFuel and fuelPerKgBenefit
 			initialFuel: cfg.fuelLoad, // interpreted per spec as initial fuel value
 			fuelPerKgBenefit: 0.005,
 		};
@@ -154,8 +145,8 @@ app.post("/api/optimise-strict", (req, res) => {
 	}
 });
 
-// Saved Configs API (SQLite)
-// Save a config by name
+// saved configs api (sqlite)
+// save a config by name
 app.post("/api/configs", (req, res) => {
 	const { name, config } = req.body || {};
 	if (!name || typeof name !== 'string' || !name.trim()) {
@@ -176,7 +167,7 @@ app.post("/api/configs", (req, res) => {
 	}
 });
 
-// List saved config names
+// list saved config names
 app.get("/api/configs", (_req, res) => {
 	try {
 		const items = dbListConfigs();
@@ -187,7 +178,7 @@ app.get("/api/configs", (_req, res) => {
 	}
 });
 
-// Get a specific config by name
+// get a specific config by name
 app.get("/api/configs/:name", (req, res) => {
 	const name = req.params.name;
 	if (!name) return res.status(400).json({ error: 'Name required' });
@@ -201,14 +192,29 @@ app.get("/api/configs/:name", (req, res) => {
 	}
 });
 
-// default to 5500 (avoid macOS ControlCenter on 5000) unless PORT explicitly provided
+if (serveFrontendFromBackend) {
+	app.use(express.static(distDir));
+	app.get("*", (_req, res) => {
+		res.sendFile(path.join(distDir, "index.html"));
+	});
+} else {
+	app.use((req, res, next) => {
+		if (req.path && req.path.startsWith('/api')) return next();
+		if (req.method && req.method.toUpperCase() === 'GET') {
+			return res.status(204).end();
+		}
+		return res.status(404).end();
+	});
+}
+
+// default to 5500
 const requestedPort = process.env.PORT ? Number(process.env.PORT) : null;
 const BASE_PORT = Number.isFinite(requestedPort) && requestedPort > 0 ? requestedPort : 5500;
-// Allow explicit override: if PORT_FALLBACK=1 then still attempt incremental ports even with PORT set.
+// allow override
 const explicitFallbackFlag = process.env.PORT_FALLBACK && process.env.PORT_FALLBACK !== '0';
-const fallbackAttempts = process.env.PORT && !explicitFallbackFlag ? 0 : 20;
+const fallbackAttempts = explicitFallbackFlag ? 20 : 0;
 
-// startup that auto-falls back to the next available port(s) if in use
+// startup that auto-falls back to the next available port if in use
 function startWithFallback(startPort, maxTries = 20) {
 	let port = startPort;
 	const server = http.createServer(app);

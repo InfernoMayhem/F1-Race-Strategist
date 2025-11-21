@@ -10,7 +10,7 @@ function toInt(v, fallback) {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// calculate lap times using a model:
+// calculate lap times using a model
 function calculateLapTimes(config, params = {}) {
   const totalLaps = toInt(config.totalLaps, 0);
   const baseLapTime = toNumber(config.baseLapTime, 0);
@@ -39,11 +39,11 @@ function calculateLapTimes(config, params = {}) {
       tyrePenalty = wearBaseSec * ((1 + wearGrowth) ** i - 1) / wearGrowth;
     }
 
-  // fuel benefit increases as more fuel is burned
+    // fuel benefit increases as more fuel is burned
     const fuelBurnedKg = burnPerLapKg * (i - 1);
-  const fuelBenefit = fuelPerKgBenefit * fuelBurnedKg;
+    const fuelBenefit = fuelPerKgBenefit * fuelBurnedKg;
 
-  const lapTime = baseLapTime + tyrePenalty - fuelBenefit;
+    const lapTime = baseLapTime + tyrePenalty - fuelBenefit;
     laps.push(Number(lapTime.toFixed(3)));
   }
 

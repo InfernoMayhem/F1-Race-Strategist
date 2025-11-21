@@ -1,5 +1,8 @@
 node_modules/
 *.log
-
-# ignore deprecated python optimiser folder (no longer used)
-python_optimizer/
+.DS_Store
+dist/
+frontend/dist/
+data/*.db
+data/*.db-shm
+data/*.db-wal

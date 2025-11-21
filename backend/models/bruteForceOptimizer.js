@@ -1,15 +1,7 @@
 "use strict";
 
-// Full brute-force F1 strategy optimiser (JavaScript only).
-// Requirements implemented:
-// - generatePitWindows(totalLaps): enumerate all valid 2-stop (3-stint) pit sequences
-//   with minimum and maximum stint length constraints and no pit on lap 1 or last lap.
-// - generateTyreCombos(): enumerate all compound assignments for 3 stints (Soft/Medium/Hard)
-//   requiring at least two distinct compounds.
-// - calcLapTime(): baseLapTime + tyreDeg(lapInStint) - fuelAdv(burnedMass)
-//   uses exponential cumulative tyre degradation, and a concave non-linear fuel advantage.
-// - simulateRace(): run lap-by-lap for a specific [pit_laps, compounds] strategy.
-// - findOptimal(): brute-force all combinations and pick the strategy with the lowest total time.
+// brute-force f1 strategy optimiser
+// calculates lap times with exponential tyre degradation and non-linear fuel advantage
 
 const { BASE_COMPOUNDS, getTrackDegFactor, tyreWearPenalty } = require('./tyreModel');
 const DEFAULT_SLICK_COMPOUNDS = {
@@ -21,21 +13,17 @@ const DEFAULT_SLICK_COMPOUNDS = {
 function toNumber(v, fb) { const n = Number(v); return Number.isFinite(n) ? n : fb; }
 function clamp(n, a, b) { return Math.max(a, Math.min(b, n)); }
 
-// --------------------------- Strategy Search --------------------------- //
+// strategy search //
 
 function generatePitWindows(totalLaps, minStint, maxStint) {
-  // Allow callers to omit min/max; infer from global slick compound bounds.
+  // infer min/max from global slick compound bounds if omitted
   if (minStint == null || maxStint == null) {
     const mins = Object.values(DEFAULT_SLICK_COMPOUNDS).map(t => t.minLife);
     const maxs = Object.values(DEFAULT_SLICK_COMPOUNDS).map(t => t.maxLife);
     minStint = Math.min(...mins);
     maxStint = Math.max(...maxs);
   }
-  // Two stops => 3 stints => two pit laps p1 < p2, with:
-  // stint1 = p1, stint2 = p2 - p1, stint3 = totalLaps - p2
-  // Constraints:
-  // - No pit on lap 1 or last lap
-  // - Each stint length in [minStint, maxStint]
+  // constraints: no pit on lap 1 or last lap, each stint length in [minStint, maxStint]
   const windows = [];
   const firstMin = minStint;
   const firstMax = Math.min(maxStint, totalLaps - minStint - minStint);
@@ -59,7 +47,7 @@ function generatePitWindows(totalLaps, minStint, maxStint) {
 }
 
 function generateTyreCombos() {
-  // All 3-stint assignments from {Soft, Medium, Hard} with at least 2 distinct compounds.
+  // all 3-stint assignments from {soft, medium, hard} with at least 2 distinct compounds
   const keys = Object.keys(DEFAULT_SLICK_COMPOUNDS);
   const combos = [];
   for (const a of keys) for (const b of keys) for (const c of keys) {
@@ -69,16 +57,11 @@ function generateTyreCombos() {
   return combos;
 }
 
-// --------------------------- Lap Time Model --------------------------- //
-
-// New per-lap wear penalty is handled in calcLapTime via tyreWearPenalty
+// lap time model //
 
 function fuelAdvantageSeconds(fuelBurnedKg, fuelPerKgBenefit) {
-  // Non-linear concave advantage: diminishing returns as more fuel is burned.
-  // Using log1p to avoid arbitrary power-law constants.
-  // Scale so that for small values it approximates linear: benefit ≈ fuelPerKgBenefit * fuelBurnedKg.
-  // We modulate via a mild concavity factor.
-  const concavity = 0.85; // 0<k<1 => concave
+  // diminishing returns as more fuel is burned
+  const concavity = 0.85;
   const effKg = Math.pow(Math.max(0, fuelBurnedKg), concavity);
   return fuelPerKgBenefit * effKg;
 }
@@ -93,7 +76,7 @@ function calcLapTime({ baseLapTime, tyreModel, lapGlobal, lapInStint, totalLaps,
   return raw;
 }
 
-// --------------------------- Simulation Core -------------------------- //
+// simulation core //
 
 function simulateRace(config, pitLaps, compounds) {
   // config requires: totalLaps, baseLapTime, fuelLoad, pitStopLoss
@@ -112,17 +95,17 @@ function simulateRace(config, pitLaps, compounds) {
   const p2 = pitLaps[1];
   const stintLengths = [p1, p2 - p1, totalLaps - p2];
 
-  // Per-tyre life validation (reject if any stint exceeds tyre max or under min)
+  // per-tyre life validation (reject if any stint exceeds tyre max or under min)
   for (let i = 0; i < 3; i++) {
     const t = compoundModels[compounds[i]];
     const len = stintLengths[i];
     if (!t || len < t.minLife || len > t.maxLife) return null;
   }
 
-  // At least two distinct compounds (already ensured in generateTyreCombos, but keep guard)
+  // at least two distinct compounds
   if (new Set(compounds).size < 2) return null;
 
-  // Run lap-by-lap
+  // run lap-by-lap
   let totalTime = 0;
   const lapSeries = [];
   let globalLap = 1;
@@ -142,14 +125,14 @@ function simulateRace(config, pitLaps, compounds) {
   return { totalTime: Number(totalTime.toFixed(3)), lapSeries, stintLengths };
 }
 
-// --------------------------- Orchestration ----------------------------- //
+// orchestration //
 
 function findOptimal(config) {
   const totalLaps = toNumber(config.totalLaps, 0);
   if (!Number.isFinite(totalLaps) || totalLaps < 10) {
     throw new Error("totalLaps must be >= 10 for 2-stop enumeration");
   }
-  // Use global min/max stint bounds from slick compounds to ensure feasibility space
+  // use global min/max stint bounds from slick compounds to ensure feasibility space
   const minStint = Math.min(...Object.values(DEFAULT_SLICK_COMPOUNDS).map(t => t.minLife));
   const maxStint = Math.max(...Object.values(DEFAULT_SLICK_COMPOUNDS).map(t => t.maxLife));
   const pitWindows = generatePitWindows(totalLaps, minStint, maxStint);

@@ -1,26 +1,20 @@
 "use strict";
 
-// Strict F1 strategy optimiser per user specification.
-// Pure JavaScript, deterministic, and browser-compatible (no Node APIs inside core functions).
+// strict f1 strategy optimiser per user spec
 
-// 1) Tyres (exact values, do not change unless user changes them)
+// tyre constants
 const tyreData = {
   soft:   { baseOffset: -0.35, wearBase: 0.035, wearGrowth: 0.020, maxLaps: 22 },
   medium: { baseOffset:  0.00, wearBase: 0.020, wearGrowth: 0.010, maxLaps: 28 },
   hard:   { baseOffset:  0.25, wearBase: 0.015, wearGrowth: 0.005, maxLaps: 38 },
 };
 
-const MIN_STINT = 8; // laps
+const MIN_STINT = 8;
 
-// Utility: clamp and helpers (no external deps)
+// helpers
 const toNumber = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };
 
-// 2) Lap Time Model (exact formula)
-// lap_time = baseLapTime
-//          + tyre.baseOffset
-//          + (tyre.wearBase * stintLap)
-//          + (tyre.wearGrowth * Math.pow(stintLap, 1.7))
-//          - (fuelPerKgBenefit * (initialFuel - lapNumber))
+// lap time model
 function calculateLapTime(lapIndex, stintLap, compound, params) {
   const compKey = String(compound || '').toLowerCase();
   const tyre = tyreData[compKey];
@@ -28,14 +22,14 @@ function calculateLapTime(lapIndex, stintLap, compound, params) {
   const baseLapTime = toNumber(params.baseLapTime, 0);
   const fuelPerKgBenefit = toNumber(params.fuelPerKgBenefit, 0.005);
   const initialFuel = toNumber(params.initialFuel, 0);
-  const lapNumber = lapIndex; // lapIndex is 1-based when called below
+  const lapNumber = lapIndex; 
   const wearTerm = (tyre.wearBase * stintLap) + (tyre.wearGrowth * Math.pow(stintLap, 1.7));
   const fuelBenefit = fuelPerKgBenefit * (initialFuel - lapNumber);
   return baseLapTime + tyre.baseOffset + wearTerm - fuelBenefit;
 }
 
-// Build list of pit stop lap arrays for a given stop count.
-// Rules: each stint >= 8 laps, and no pit on lap 1 or last lap (naturally enforced by lengths).
+// build list of pit stop lap arrays for a given stop count
+// each stint is at least 8 laps and can't be the first or last lap
 function generatePitCombos(totalLaps, stopCount) {
   const results = [];
   if (stopCount === 1) {
@@ -77,7 +71,7 @@ function generatePitCombos(totalLaps, stopCount) {
   return results;
 }
 
-// All stints for totalLaps with given pit laps: returns { from, to } for each stint.
+// all stints for totalLaps with given pit laps, returns { from, to } for each stint
 function stintsFromPits(totalLaps, pitLaps) {
   const stints = [];
   let start = 1;
@@ -90,9 +84,9 @@ function stintsFromPits(totalLaps, pitLaps) {
   return stints;
 }
 
-// Generate all tyre assignments for N stints requiring at least two distinct compounds.
+// generate all tyre assignments for n stints requiring at least two distinct compounds
 function generateTyreAssignments(stintCount) {
-  const keys = Object.keys(tyreData); // ['soft','medium','hard']
+  const keys = Object.keys(tyreData); 
   const out = [];
   function backtrack(idx, acc) {
     if (idx === stintCount) {
@@ -110,7 +104,7 @@ function generateTyreAssignments(stintCount) {
   return out;
 }
 
-// Validate stint lengths: >= MIN_STINT and <= compound max for assigned compound.
+// validate stint lengths: >= MIN_STINT and <= compound max for assigned compound
 function validateStintsWithCompounds(stints, compounds) {
   if (stints.length !== compounds.length) return false;
   for (let i = 0; i < stints.length; i++) {
@@ -123,10 +117,10 @@ function validateStintsWithCompounds(stints, compounds) {
   return true;
 }
 
-// Evaluate a candidate strategy: returns { totalTime, lapTimes, pitLaps, stints } or null if invalid.
+// evaluate a candidate strategy: returns { totalTime, lapTimes, pitLaps, stints } or null if invalid
 function evaluateStrategy(params, pitLaps, compounds) {
   const totalLaps = toNumber(params.totalLaps, 0);
-  const baseLapTime = toNumber(params.baseLapTime, 0); // used in calculateLapTime via params
+  const baseLapTime = toNumber(params.baseLapTime, 0); 
   const pitStopLoss = toNumber(params.pitStopLoss, 0);
   if (!Number.isFinite(totalLaps) || totalLaps <= 0) return null;
   if (!Array.isArray(pitLaps)) return null;
@@ -134,7 +128,7 @@ function evaluateStrategy(params, pitLaps, compounds) {
   const stintRanges = stintsFromPits(totalLaps, pitLaps);
   if (!validateStintsWithCompounds(stintRanges, compounds)) return null;
 
-  // Simulate lap by lap
+  // simulate lap by lap
   const lapTimes = [];
   let totalTime = 0;
   let stintIndex = 0;
@@ -155,7 +149,7 @@ function evaluateStrategy(params, pitLaps, compounds) {
     }
   }
 
-  // Build stints output with capitalized names
+  // build stints output
   const stintsOut = stintRanges.map((r, i) => ({
     from: r.from,
     to: r.to,
@@ -192,7 +186,7 @@ function optimiseForStopCount(params, stopCount) {
   return best;
 }
 
-// Main optimiser: tries 1, 2, 3 stops; returns overall best valid strategy or throws if none.
+// main optimiser - tries 1, 2, 3 stops, returns overall best valid strategy or throws if none
 function optimiseStrict(params) {
   let best = null;
   for (let stopCount = 1; stopCount <= 3; stopCount++) {
@@ -204,7 +198,6 @@ function optimiseStrict(params) {
   return best;
 }
 
-// Export for Node; functions themselves are browser-friendly.
 module.exports = {
   tyreData,
   calculateLapTime,

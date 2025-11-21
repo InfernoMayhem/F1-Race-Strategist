@@ -1,8 +1,6 @@
 "use strict";
 
-// Shared tyre wear model for realistic, non-linear degradation and stint validation.
-
-// Base compound characteristics (only baseOffset used directly here; other params drive wear curve)
+// base compound characteristics
 const BASE_COMPOUNDS = {
   Soft:   { baseOffset: -0.75 },
   Medium: { baseOffset:  0.0 },
@@ -11,7 +9,7 @@ const BASE_COMPOUNDS = {
   Wet: { baseOffset: 5.0 },
 };
 
-// Wear curve parameters per compound (piecewise exponential + cliff), tuned for high-deg realism
+// wear curve parameters per compound
 const WEAR_PARAMS = {
   Soft:   { linear: 0.07, wearStart: 6,  beta: 0.10, gamma: 0.20, cliffStart: 16, cliffBeta: 0.20, cliffGamma: 0.25 },
   Medium: { linear: 0.05, wearStart: 10, beta: 0.08, gamma: 0.18, cliffStart: 24, cliffBeta: 0.14, cliffGamma: 0.22 },
@@ -23,47 +21,47 @@ const WEAR_PARAMS = {
 function toNumber(v, fb) { const n = Number(v); return Number.isFinite(n) ? n : fb; }
 
 function getTrackDegFactor(config) {
-  // Infer a degradation severity factor from track type and temperature.
-  // 1.0 = baseline, up to ~1.5 for very high-deg conditions.
+  // infer a degradation severity factor from track type and temperature
+  // 1.0 = baseline, up to ~1.5 for very high-deg conditions
   const trackType = (config.trackType || "").toString();
   const temp = toNumber(config.temperature, 25);
   let factor = 1.0;
   if (/high\s*wear|abrasive|bahrain|barcelona/i.test(trackType)) factor = 1.25;
   else if (/street|temporary/i.test(trackType)) factor = 1.05;
-  // Temperature effect (hotter => more deg)
+  // temperature effect (hotter => more deg)
   if (temp >= 30) factor *= 1.05;
   if (temp >= 35) factor *= 1.10;
   if (temp >= 40) factor *= 1.15;
   return Math.max(0.9, Math.min(1.5, factor));
 }
 
-// Non-linear per-lap tyre wear penalty in seconds (not cumulative), increasing with age.
+// non-linear per-lap tyre wear penalty in seconds, increasing with age
 function tyreWearPenalty(compound, stintLapAge, trackDegFactor = 1.0, maxStintLap = 35) {
   const p = WEAR_PARAMS[compound] || WEAR_PARAMS.Medium;
   const age = Math.max(1, stintLapAge);
-  // Base linear build-up
+  // base linear build-up
   let penalty = p.linear * age;
-  // Exponential after wearStart
+  // exponential after wearStart
   if (age > p.wearStart) {
     penalty += p.beta * (Math.exp(p.gamma * (age - p.wearStart)) - 1);
   }
-  // Cliff region
+  // cliff region
   if (age > p.cliffStart) {
     penalty += p.cliffBeta * (Math.exp(p.cliffGamma * (age - p.cliffStart)) - 1);
   }
-  // Very long stints get huge penalties beyond maxStintLap
+  // very long stints get huge penalties beyond maxStintLap
   if (age > maxStintLap) {
-    penalty += Math.pow(1.25, age - maxStintLap) * 5; // ~+5s at age=maxStintLap+1, grows quickly
+    penalty += Math.pow(1.25, age - maxStintLap) * 5;
   }
   return penalty * trackDegFactor;
 }
 
-// Linear fuel weight effect (seconds gained as fuel burns)
+// linear fuel weight effect
 function fuelAdvantageSecondsLinear(fuelBurnedKg, fuelPerKgBenefit) {
   return fuelPerKgBenefit * Math.max(0, fuelBurnedKg);
 }
 
-// Revised lap time generator using new tyre model; returns { time, wearPenalty, invalid }
+// revised lap time generator using new tyre model; returns { time, wearPenalty, invalid }
 function calcLapTimeWithWear({
   compound,
   age,

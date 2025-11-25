@@ -1,7 +1,5 @@
 "use strict";
 
-// strict f1 strategy optimiser per user spec
-
 // tyre constants
 const tyreData = {
   soft:   { baseOffset: -0.35, wearBase: 0.035, wearGrowth: 0.020, maxLaps: 22 },

@@ -1,6 +1,179 @@
 const { BASE_COMPOUNDS, getTrackDegFactor, calcLapTimeWithWear } = require('./tyreModel');
-const strictOpt = require('./strictOptimizer');
 const DEFAULT_COMPOUNDS = BASE_COMPOUNDS;
+
+// optimiser
+
+const strictTyreData = {
+  soft:   { baseOffset: -0.35, wearBase: 0.035, wearGrowth: 0.020, maxLaps: 22 },
+  medium: { baseOffset:  0.00, wearBase: 0.020, wearGrowth: 0.010, maxLaps: 28 },
+  hard:   { baseOffset:  0.25, wearBase: 0.015, wearGrowth: 0.005, maxLaps: 38 },
+};
+
+const MIN_STINT = 8;
+
+function calculateStrictLapTime(lapIndex, stintLap, compound, params) {
+  const compKey = String(compound || '').toLowerCase();
+  const tyre = strictTyreData[compKey];
+  if (!tyre) throw new Error(`Unknown compound: ${compound}`);
+  const baseLapTime = toNumber(params.baseLapTime, 0);
+  const fuelPerKgBenefit = toNumber(params.fuelPerKgBenefit, 0.005);
+  const initialFuel = toNumber(params.initialFuel, 0);
+  const lapNumber = lapIndex; 
+  const wearTerm = (tyre.wearBase * stintLap) + (tyre.wearGrowth * Math.pow(stintLap, 1.7));
+  const fuelBenefit = fuelPerKgBenefit * (initialFuel - lapNumber);
+  return baseLapTime + tyre.baseOffset + wearTerm - fuelBenefit;
+}
+
+function generatePitCombos(totalLaps, stopCount) {
+  const results = [];
+  if (stopCount === 1) {
+    const iMin = MIN_STINT;
+    const iMax = totalLaps - MIN_STINT;
+    for (let i = iMin; i <= iMax; i++) {
+      results.push([i]);
+    }
+    return results;
+  }
+  if (stopCount === 2) {
+    const iMin = MIN_STINT;
+    const iMax = totalLaps - 2 * MIN_STINT;
+    for (let i = iMin; i <= iMax; i++) {
+      const jMin = i + MIN_STINT;
+      const jMax = totalLaps - MIN_STINT;
+      for (let j = jMin; j <= jMax; j++) {
+        results.push([i, j]);
+      }
+    }
+    return results;
+  }
+  if (stopCount === 3) {
+    const iMin = MIN_STINT;
+    const iMax = totalLaps - 3 * MIN_STINT;
+    for (let i = iMin; i <= iMax; i++) {
+      const jMin = i + MIN_STINT;
+      const jMax = totalLaps - 2 * MIN_STINT;
+      for (let j = jMin; j <= jMax; j++) {
+        const kMin = j + MIN_STINT;
+        const kMax = totalLaps - MIN_STINT;
+        for (let k = kMin; k <= kMax; k++) {
+          results.push([i, j, k]);
+        }
+      }
+    }
+    return results;
+  }
+  return results;
+}
+
+function stintsFromPits(totalLaps, pitLaps) {
+  const stints = [];
+  let start = 1;
+  for (let i = 0; i < pitLaps.length; i++) {
+    const pit = pitLaps[i];
+    stints.push({ from: start, to: pit });
+    start = pit + 1;
+  }
+  stints.push({ from: start, to: totalLaps });
+  return stints;
+}
+
+function generateTyreAssignments(stintCount) {
+  const keys = Object.keys(strictTyreData); 
+  const out = [];
+  function backtrack(idx, acc) {
+    if (idx === stintCount) {
+      const s = new Set(acc);
+      if (s.size >= 2) out.push(acc.slice());
+      return;
+    }
+    for (let k = 0; k < keys.length; k++) {
+      acc.push(keys[k]);
+      backtrack(idx + 1, acc);
+      acc.pop();
+    }
+  }
+  backtrack(0, []);
+  return out;
+}
+
+function validateStintsWithCompounds(stints, compounds) {
+  if (stints.length !== compounds.length) return false;
+  for (let i = 0; i < stints.length; i++) {
+    const len = stints[i].to - stints[i].from + 1;
+    if (len < MIN_STINT) return false;
+    const comp = strictTyreData[compounds[i]];
+    if (!comp) return false;
+    if (len > comp.maxLaps) return false;
+  }
+  return true;
+}
+
+function evaluateStrictStrategy(params, pitLaps, compounds) {
+  const totalLaps = toNumber(params.totalLaps, 0);
+  const baseLapTime = toNumber(params.baseLapTime, 0); 
+  const pitStopLoss = toNumber(params.pitStopLoss, 0);
+  if (!Number.isFinite(totalLaps) || totalLaps <= 0) return null;
+  if (!Array.isArray(pitLaps)) return null;
+
+  const stintRanges = stintsFromPits(totalLaps, pitLaps);
+  if (!validateStintsWithCompounds(stintRanges, compounds)) return null;
+
+  const lapTimes = [];
+  let totalTime = 0;
+  let stintIndex = 0;
+  let currentStint = stintRanges[0];
+  let currentStintLap = 0;
+  for (let lap = 1; lap <= totalLaps; lap++) {
+    if (lap === currentStint.from) currentStintLap = 1; else currentStintLap += 1;
+    const compKey = compounds[stintIndex];
+    const t = calculateStrictLapTime(lap, currentStintLap, compKey, params);
+    lapTimes.push(t);
+    totalTime += t;
+    if (lap === currentStint.to) {
+      if (stintIndex < stintRanges.length - 1) totalTime += pitStopLoss;
+      stintIndex += 1;
+      currentStint = stintRanges[stintIndex] || currentStint;
+      currentStintLap = 0;
+    }
+  }
+
+  const stintsOut = stintRanges.map((r, i) => ({
+    from: r.from,
+    to: r.to,
+    compound: (String(compounds[i]).charAt(0).toUpperCase() + String(compounds[i]).slice(1).toLowerCase()),
+  }));
+
+  return {
+    totalTime: Number(totalTime.toFixed(3)),
+    pitLaps: pitLaps.slice(),
+    stints: stintsOut,
+    lapTimes: lapTimes.map(v => Number(v.toFixed(3))),
+  };
+}
+
+function optimiseForStopCount(params, stopCount) {
+  const totalLaps = toNumber(params.totalLaps, 0);
+  if (!Number.isFinite(totalLaps) || totalLaps < 1) throw new Error('totalLaps must be > 0');
+  const pitCombos = generatePitCombos(totalLaps, stopCount);
+  if (!pitCombos.length) return null;
+  const stintCount = stopCount + 1;
+  const tyreCombos = generateTyreAssignments(stintCount);
+  let best = null;
+  for (let p = 0; p < pitCombos.length; p++) {
+    const pits = pitCombos[p];
+    const stintRanges = stintsFromPits(totalLaps, pits);
+    for (let c = 0; c < tyreCombos.length; c++) {
+      const combo = tyreCombos[c];
+      if (!validateStintsWithCompounds(stintRanges, combo)) continue;
+      const sim = evaluateStrictStrategy(params, pits, combo);
+      if (!sim) continue;
+      if (!best || sim.totalTime < best.totalTime - 1e-9) best = sim;
+    }
+  }
+  return best;
+}
+
+//
 
 function toNumber(v, fb) { const n = Number(v); return Number.isFinite(n) ? n : fb; }
 function toInt(v, fb) { const n = parseInt(v, 10); return Number.isFinite(n) ? n : fb; }
@@ -17,7 +190,7 @@ function buildStrictStrategy(strictResult, config) {
   strictResult.stints.forEach((st, sIdx) => {
     const compName = st.compound;
     const compKey = String(compName || '').toLowerCase();
-    const tyre = strictOpt.tyreData[compKey];
+    const tyre = strictTyreData[compKey];
     const laps = st.to - st.from + 1;
     const stintLapTimes = [];
     const stintTyrePenalties = [];
@@ -71,7 +244,7 @@ function generateStrictStrategies(config) {
   for (const stopCount of [1, 2, 3]) {
     let strictResult = null;
     try {
-      strictResult = strictOpt.optimiseForStopCount(params, stopCount);
+      strictResult = optimiseForStopCount(params, stopCount);
     } catch (err) {
       strictResult = null;
     }
@@ -379,7 +552,7 @@ function generateStrategies(config, options = {}) {
     for (let s=0; s<strictBest.stints.length; s++){
       const stint = strictBest.stints[s];
       const compKey = String(stint.compound || '').toLowerCase();
-      const tyre = strictOpt.tyreData[compKey];
+      const tyre = strictTyreData[compKey];
       const len = (stint.to - stint.from + 1);
       for (let i=1; i<=len; i++){
         const wearPenalty = (tyre.wearBase * i) + (tyre.wearGrowth * Math.pow(i, 1.7));
@@ -416,10 +589,10 @@ function generateStrategies(config, options = {}) {
       // strict fallback for this specific stop count
       try {
         const totalLaps = toInt(config.totalLaps, 0);
-        const pitCombos = strictOpt.generatePitCombos(totalLaps, s);
+        const pitCombos = generatePitCombos(totalLaps, s);
         const stintCount = s + 1;
         // generate tyre assignments with at least two compounds
-        const keys = Object.keys(strictOpt.tyreData);
+        const keys = Object.keys(strictTyreData);
         const tyreAssignments = [];
         (function backtrack(idx, acc){
           if (idx === stintCount){ const distinct = new Set(acc); if (distinct.size >= 2) tyreAssignments.push(acc.slice()); return; }
@@ -438,7 +611,7 @@ function generateStrategies(config, options = {}) {
           const pits = pitCombos[pi];
           for (let ci=0; ci<tyreAssignments.length; ci++){
             const combo = tyreAssignments[ci];
-            const sim = strictOpt.evaluateStrategy(params, pits, combo);
+            const sim = evaluateStrictStrategy(params, pits, combo);
             if (!sim) continue;
             if (!bestStrict || sim.totalTime < bestStrict.totalTime - 1e-9) bestStrict = sim;
           }

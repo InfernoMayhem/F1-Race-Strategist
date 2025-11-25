@@ -30,8 +30,6 @@ app.get("/api/hello", (_req, res) => {
 const { calculateLapTimes } = require("./models/calculateLapTimes");
 const { generateStrategies } = require("./models/strategyGenerator");
 const { saveConfig: dbSaveConfig, listConfigs: dbListConfigs, getConfig: dbGetConfig } = require("./models/configStore");
-const bruteForce = require("./models/bruteForceOptimizer");
-const strictOpt = require("./models/strictOptimizer");
 
 app.post("/api/race-config", (req, res) => {
 	const cfg = req.body || {};
@@ -73,75 +71,11 @@ app.post("/api/generate-strategies", (req, res) => {
 	const cfg = req.body;
 	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
 	try {
-		// optional mode switch: if query ?mode=brute, use brute-force 2-stop optimiser
-		if ((req.query && req.query.mode === 'brute') || (req.body && req.body.mode === 'brute')) {
-			const best = bruteForce.findOptimal(cfg);
-			const bestMap = { 2: {
-				stints: best.stints.map((s, i) => ({ stint: i+1, compound: s.compound, laps: s.length })),
-				pitLaps: best.pit_laps,
-				totalTime: best.total_time,
-				lapSeries: best.lapSeries,
-				actualStops: 2,
-				targetStops: 2,
-			}};
-			return res.json({ ok: true, best: bestMap, overallBest: bestMap[2] });
-		}
-			const { best, overallBest } = generateStrategies(cfg, {});
-			if (!overallBest || !best || Object.keys(best).length === 0) {
-				// fallback: run brute-force 2-stop optimiser to ensure we always return a valid strategy
-				try {
-					const bf = bruteForce.findOptimal(cfg);
-					const map = { 2: {
-						stints: bf.stints.map((s, i) => ({ stint: i+1, compound: s.compound, laps: s.length })),
-						pitLaps: bf.pit_laps,
-						totalTime: bf.total_time,
-						lapSeries: bf.lapSeries,
-						actualStops: 2,
-						targetStops: 2,
-					}};
-					return res.json({ ok: true, best: map, overallBest: map[2], meta: { fallback: 'bruteforce' } });
-				} catch (e) {
-					console.warn('Brute-force fallback failed:', e?.message || e);
-				}
-			}
-			return res.json({ ok: true, best, overallBest });
+		const { best, overallBest } = generateStrategies(cfg, {});
+		return res.json({ ok: true, best, overallBest });
 	} catch (err) {
 		console.error("generate-strategies error", err);
 		return res.status(500).json({ error: "Failed to generate strategies" });
-	}
-});
-
-// dedicated brute-force endpoint returning the optimal 2-stop (3-stint) strategy
-app.post("/api/optimise-bruteforce", (req, res) => {
-	const cfg = req.body;
-	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
-	try {
-		const best = bruteForce.findOptimal(cfg);
-		return res.json({ ok: true, best });
-	} catch (err) {
-		console.error('optimise-bruteforce error', err);
-		return res.status(500).json({ error: 'Failed to optimise strategy' });
-	}
-});
-
-// strict optimiser endpoint
-app.post("/api/optimise-strict", (req, res) => {
-	const cfg = req.body;
-	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
-	try {
-		const params = {
-			totalLaps: cfg.totalLaps,
-			baseLapTime: cfg.baseLapTime,
-			pitStopLoss: cfg.pitStopLoss,
-			// strict model expects initialFuel and fuelPerKgBenefit
-			initialFuel: cfg.fuelLoad, // interpreted per spec as initial fuel value
-			fuelPerKgBenefit: 0.005,
-		};
-		const best = strictOpt.optimiseStrict(params);
-		return res.json({ ok: true, best });
-	} catch (err) {
-		console.error('optimise-strict error', err);
-		return res.status(500).json({ error: 'Failed to optimise (strict)', details: err?.message || String(err) });
 	}
 });
 

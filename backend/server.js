@@ -37,7 +37,7 @@ app.post("/api/race-config", (req, res) => {
 		"totalLaps",
 		"trackLength",
 		"fuelLoad",
-		"trackType",
+		"degradation",
 		"temperature",
 		"baseLapTime",
 		"pitStopLoss",

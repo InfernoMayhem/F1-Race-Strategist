@@ -21,18 +21,19 @@ const WEAR_PARAMS = {
 function toNumber(v, fb) { const n = Number(v); return Number.isFinite(n) ? n : fb; }
 
 function getTrackDegFactor(config) {
-  // infer a degradation severity factor from track type and temperature
-  // 1.0 = baseline, up to ~1.5 for very high-deg conditions
-  const trackType = (config.trackType || "").toString();
+  const degLevel = (config.degradation || "Medium").toString().toLowerCase();
   const temp = toNumber(config.temperature, 25);
   let factor = 1.0;
-  if (/high\s*wear|abrasive|bahrain|barcelona/i.test(trackType)) factor = 1.25;
-  else if (/street|temporary/i.test(trackType)) factor = 1.05;
-  // temperature effect (hotter => more deg)
-  if (temp >= 30) factor *= 1.05;
-  if (temp >= 35) factor *= 1.10;
-  if (temp >= 40) factor *= 1.15;
-  return Math.max(0.9, Math.min(1.5, factor));
+  
+  if (degLevel === 'high') factor = 1.5;
+  else if (degLevel === 'low') factor = 0.7;
+  else factor = 1.0; // Medium
+
+  // temperature effect
+  if (temp >= 30) factor *= 1.1;
+  if (temp >= 35) factor *= 1.15;
+  if (temp >= 40) factor *= 1.2;
+  return Math.max(0.5, Math.min(2.5, factor));
 }
 
 // non-linear per-lap tyre wear penalty in seconds, increasing with age
@@ -61,7 +62,7 @@ function fuelAdvantageSecondsLinear(fuelBurnedKg, fuelPerKgBenefit) {
   return fuelPerKgBenefit * Math.max(0, fuelBurnedKg);
 }
 
-// revised lap time generator using new tyre model; returns { time, wearPenalty, invalid }
+// lap time generator using new tyre model; returns { time, wearPenalty, invalid }
 function calcLapTimeWithWear({
   compound,
   age,

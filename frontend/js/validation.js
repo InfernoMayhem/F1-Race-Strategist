@@ -63,10 +63,10 @@ export function getFieldValidators() {
       if (n < 1 || n > 150) return 'Fuel Load must be 1-150';
       return '';
     },
-    trackType: (el) => {
+    degradation: (el) => {
       const v = el.value;
-      if (!v) return 'Track Type is required';
-      if (!['Permanent', 'Hybrid', 'Street'].includes(v)) return 'Invalid Track Type';
+      if (!v) return 'Degradation is required';
+      if (!['Low', 'Medium', 'High'].includes(v)) return 'Invalid Degradation';
       return '';
     },
     totalRainfall: (el) => {

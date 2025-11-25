@@ -148,7 +148,7 @@ if (form) {
       totalLaps: $("totalLaps").value,
       trackLength: $("trackLength").value,
       fuelLoad: $("fuelLoad").value,
-      trackType: $("trackType").value,
+      degradation: $("degradation").value,
   totalRainfall: $("totalRainfall").value,
       temperature: $("temperature").value,
       baseLapTime: $("baseLapTime").value,
@@ -209,7 +209,7 @@ function buildCurrentConfigFromForm() {
     totalLaps: document.getElementById('totalLaps')?.value,
     trackLength: document.getElementById('trackLength')?.value,
     fuelLoad: document.getElementById('fuelLoad')?.value,
-    trackType: document.getElementById('trackType')?.value,
+    degradation: document.getElementById('degradation')?.value,
     totalRainfall: document.getElementById('totalRainfall')?.value,
     temperature: document.getElementById('temperature')?.value,
     baseLapTime: document.getElementById('baseLapTime')?.value,
@@ -223,7 +223,7 @@ function populateFormFromConfig(cfg = {}) {
   set('totalLaps', cfg.totalLaps);
   set('trackLength', cfg.trackLength);
   set('fuelLoad', cfg.fuelLoad);
-  set('trackType', cfg.trackType);
+  set('degradation', cfg.degradation);
   set('totalRainfall', cfg.totalRainfall);
   set('temperature', cfg.temperature);
   set('baseLapTime', cfg.baseLapTime);

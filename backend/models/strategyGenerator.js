@@ -3,25 +3,45 @@ const DEFAULT_COMPOUNDS = BASE_COMPOUNDS;
 
 // optimiser
 
-const strictTyreData = {
-  soft:   { baseOffset: -0.35, wearBase: 0.035, wearGrowth: 0.020, maxLaps: 22 },
-  medium: { baseOffset:  0.00, wearBase: 0.020, wearGrowth: 0.010, maxLaps: 28 },
-  hard:   { baseOffset:  0.25, wearBase: 0.015, wearGrowth: 0.005, maxLaps: 38 },
+const tyreData = {
+  soft: {
+    baseOffset: -0.5,
+    wearBase: 0.04,
+    wearGrowth: 0.02,
+    maxUsefulLaps: 18
+  },
+  medium: {
+    baseOffset: 0.0,
+    wearBase: 0.02,
+    wearGrowth: 0.010,
+    maxUsefulLaps: 28
+  },
+  hard: {
+    baseOffset: 0.3,
+    wearBase: 0.017,
+    wearGrowth: 0.006,
+    maxUsefulLaps: 38
+  }
 };
+
+const fuelPerKgBenefit = 0.014;
 
 const MIN_STINT = 8;
 
-function calculateStrictLapTime(lapIndex, stintLap, compound, params) {
+function calculateLapTime(lapNumber, stintLap, compound, params, currentFuelKg) {
   const compKey = String(compound || '').toLowerCase();
-  const tyre = strictTyreData[compKey];
+  const tyre = tyreData[compKey];
   if (!tyre) throw new Error(`Unknown compound: ${compound}`);
   const baseLapTime = toNumber(params.baseLapTime, 0);
-  const fuelPerKgBenefit = toNumber(params.fuelPerKgBenefit, 0.005);
-  const initialFuel = toNumber(params.initialFuel, 0);
-  const lapNumber = lapIndex; 
-  const wearTerm = (tyre.wearBase * stintLap) + (tyre.wearGrowth * Math.pow(stintLap, 1.7));
-  const fuelBenefit = fuelPerKgBenefit * (initialFuel - lapNumber);
-  return baseLapTime + tyre.baseOffset + wearTerm - fuelBenefit;
+  const degFactor = toNumber(params.trackDegFactor, 1.0);
+  
+  const tyrePenalty =
+    ((tyre.wearBase * stintLap) +
+    (tyre.wearGrowth * Math.pow(stintLap, 1.7))) * degFactor;
+
+  const fuelBenefit = currentFuelKg * fuelPerKgBenefit;
+
+  return baseLapTime + tyre.baseOffset + tyrePenalty - fuelBenefit;
 }
 
 function generatePitCombos(totalLaps, stopCount) {
@@ -78,7 +98,7 @@ function stintsFromPits(totalLaps, pitLaps) {
 }
 
 function generateTyreAssignments(stintCount) {
-  const keys = Object.keys(strictTyreData); 
+  const keys = Object.keys(tyreData);
   const out = [];
   function backtrack(idx, acc) {
     if (idx === stintCount) {
@@ -96,21 +116,28 @@ function generateTyreAssignments(stintCount) {
   return out;
 }
 
+function validateStintLength(stintLength, compound) {
+  const compKey = String(compound || '').toLowerCase();
+  const comp = tyreData[compKey];
+  if (!comp) return false;
+  return stintLength <= comp.maxUsefulLaps;
+}
+
 function validateStintsWithCompounds(stints, compounds) {
   if (stints.length !== compounds.length) return false;
   for (let i = 0; i < stints.length; i++) {
     const len = stints[i].to - stints[i].from + 1;
     if (len < MIN_STINT) return false;
-    const comp = strictTyreData[compounds[i]];
+    const compKey = String(compounds[i] || '').toLowerCase();
+    const comp = tyreData[compKey];
     if (!comp) return false;
-    if (len > comp.maxLaps) return false;
+    if (!validateStintLength(len, compKey)) return false;
   }
   return true;
 }
 
 function evaluateStrictStrategy(params, pitLaps, compounds) {
   const totalLaps = toNumber(params.totalLaps, 0);
-  const baseLapTime = toNumber(params.baseLapTime, 0); 
   const pitStopLoss = toNumber(params.pitStopLoss, 0);
   if (!Number.isFinite(totalLaps) || totalLaps <= 0) return null;
   if (!Array.isArray(pitLaps)) return null;
@@ -123,10 +150,13 @@ function evaluateStrictStrategy(params, pitLaps, compounds) {
   let stintIndex = 0;
   let currentStint = stintRanges[0];
   let currentStintLap = 0;
+  const initialFuel = toNumber(params.initialFuel, 0);
+  const fuelBurnPerLap = totalLaps > 0 ? initialFuel / totalLaps : 0;
   for (let lap = 1; lap <= totalLaps; lap++) {
     if (lap === currentStint.from) currentStintLap = 1; else currentStintLap += 1;
     const compKey = compounds[stintIndex];
-    const t = calculateStrictLapTime(lap, currentStintLap, compKey, params);
+    const currentFuelKg = Math.max(0, initialFuel - fuelBurnPerLap * (lap - 1));
+    const t = calculateLapTime(lap, currentStintLap, compKey, params, currentFuelKg);
     lapTimes.push(t);
     totalTime += t;
     if (lap === currentStint.to) {
@@ -181,26 +211,27 @@ function toInt(v, fb) { const n = parseInt(v, 10); return Number.isFinite(n) ? n
 function buildStrictStrategy(strictResult, config) {
   if (!strictResult) return null;
   const totalLaps = toInt(config.totalLaps, 0);
+  const baseLapTime = toNumber(config.baseLapTime, 0);
   const fuelLoadKg = toNumber(config.fuelLoad, 0);
   const fuelBurnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
   const lapSeries = [];
   const stints = [];
-  let lapIdx = 0;
   let fastest = null;
   strictResult.stints.forEach((st, sIdx) => {
     const compName = st.compound;
     const compKey = String(compName || '').toLowerCase();
-    const tyre = strictTyreData[compKey];
+    const tyre = tyreData[compKey];
     const laps = st.to - st.from + 1;
     const stintLapTimes = [];
     const stintTyrePenalties = [];
     const stintFuelLoads = [];
     for (let i = 1; i <= laps; i++) {
-      const lapTime = strictResult.lapTimes[lapIdx] ?? 0;
       const lapNumber = st.from + i - 1;
       const wearPenalty = tyre ? (tyre.wearBase * i) + (tyre.wearGrowth * Math.pow(i, 1.7)) : 0;
       const fuelLoad = Math.max(0, fuelLoadKg - fuelBurnPerLap * (lapNumber - 1));
-      const timeRounded = Number(Number(lapTime).toFixed(3));
+      const fuelBenefit = fuelLoad * fuelPerKgBenefit;
+      const modeledLapTime = baseLapTime + (tyre ? tyre.baseOffset : 0) + wearPenalty - fuelBenefit;
+      const timeRounded = Number(Number(modeledLapTime).toFixed(3));
       const wearRounded = Number(wearPenalty.toFixed(3));
       const fuelRounded = Number(fuelLoad.toFixed(3));
       stintLapTimes.push(timeRounded);
@@ -218,7 +249,6 @@ function buildStrictStrategy(strictResult, config) {
       if (!fastest || timeRounded < fastest.time) {
         fastest = { time: timeRounded, globalLap: lapNumber, stintIndex: sIdx, lapInStint: i, compound: compName };
       }
-      lapIdx += 1;
     }
     stints.push({ stint: sIdx + 1, compound: compName, laps, lapTimes: stintLapTimes, tyrePenalties: stintTyrePenalties, fuelLoads: stintFuelLoads });
   });
@@ -238,7 +268,8 @@ function generateStrictStrategies(config) {
     baseLapTime: toNumber(config.baseLapTime, 0),
     pitStopLoss: toNumber(config.pitStopLoss, 0),
     initialFuel: toNumber(config.fuelLoad, 0),
-    fuelPerKgBenefit: 0.005,
+    fuelPerKgBenefit,
+    trackDegFactor: getTrackDegFactor(config),
   };
   const bestByStops = {};
   for (const stopCount of [1, 2, 3]) {
@@ -263,7 +294,7 @@ function generateStrictStrategies(config) {
 // compute lap time and degradation factor given lap number in race and stint lap index
 function lapTime({ baseLapTime, fuelPerKgBenefit, fuelBurnPerLap, lapNumber, stintLapIndex, compoundModel, trackDegFactor, maxStintLap, rejectThresholdSec }) {
   const { baseOffset } = compoundModel;
-  const totalLaps = 1000000; // fuelBurnPerLap already computed from real total
+  const totalLaps = 1000000;
   const fuelLoadKg = fuelBurnPerLap * totalLaps; // makes burnedKg = fuelBurnPerLap*(lap-1) below
   const { time, wearPenalty, invalid } = calcLapTimeWithWear({
     compound: compoundModel.name || 'Medium',
@@ -285,7 +316,6 @@ function simulateStrategy(config, strategy, compoundModels, opts) {
   const totalLaps = toInt(config.totalLaps, 0);
   const baseLapTime = toNumber(config.baseLapTime, 0);
   const fuelLoadKg = toNumber(config.fuelLoad, 0);
-  const fuelPerKgBenefit = 0.005;
   const fuelBurnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
   const trackDegFactor = getTrackDegFactor(config);
   const maxStintLap = toInt(config.maxStintLap, 35) || 35;
@@ -420,7 +450,6 @@ function generateStrategies(config, options = {}) {
 
   const baseLapTime = toNumber(config.baseLapTime, 0);
   const fuelLoadKg = toNumber(config.fuelLoad, 0);
-  const fuelPerKgBenefit = 0.005;
   const fuelBurnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
   const pitStopLoss = toNumber(config.pitStopLoss, 0);
   const trackDegFactor = getTrackDegFactor(config);
@@ -544,21 +573,22 @@ function generateStrategies(config, options = {}) {
     if (!strictBest) return null;
     const totalLaps = toInt(config.totalLaps, 0);
     const fuelLoadKg = toNumber(config.fuelLoad, 0);
-    const fuelPerKgBenefit = 0.005;
     const baseLapTime = toNumber(config.baseLapTime, 0);
     const burnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
+    const degFactor = getTrackDegFactor(config);
     const lapSeries = [];
     let globalLap = 1;
     for (let s=0; s<strictBest.stints.length; s++){
       const stint = strictBest.stints[s];
       const compKey = String(stint.compound || '').toLowerCase();
-      const tyre = strictTyreData[compKey];
+      const tyre = tyreData[compKey];
       const len = (stint.to - stint.from + 1);
       for (let i=1; i<=len; i++){
-        const wearPenalty = (tyre.wearBase * i) + (tyre.wearGrowth * Math.pow(i, 1.7));
+        const rawWear = tyre ? (tyre.wearBase * i) + (tyre.wearGrowth * Math.pow(i, 1.7)) : 0;
+        const wearPenalty = rawWear * degFactor;
         const currentFuel = Math.max(0, fuelLoadKg - burnPerLap * (globalLap - 1));
-        const fuelBenefit = fuelPerKgBenefit * (fuelLoadKg - globalLap);
-        const time = baseLapTime + tyre.baseOffset + wearPenalty - fuelBenefit;
+        const fuelBenefit = currentFuel * fuelPerKgBenefit;
+        const time = baseLapTime + (tyre ? tyre.baseOffset : 0) + wearPenalty - fuelBenefit;
         lapSeries.push({
           lap: globalLap,
           time: Number(time.toFixed(3)),
@@ -592,7 +622,7 @@ function generateStrategies(config, options = {}) {
         const pitCombos = generatePitCombos(totalLaps, s);
         const stintCount = s + 1;
         // generate tyre assignments with at least two compounds
-        const keys = Object.keys(strictTyreData);
+        const keys = Object.keys(tyreData);
         const tyreAssignments = [];
         (function backtrack(idx, acc){
           if (idx === stintCount){ const distinct = new Set(acc); if (distinct.size >= 2) tyreAssignments.push(acc.slice()); return; }
@@ -603,7 +633,8 @@ function generateStrategies(config, options = {}) {
           baseLapTime: toNumber(config.baseLapTime, 0),
           pitStopLoss: toNumber(config.pitStopLoss, 0),
           initialFuel: toNumber(config.fuelLoad, 0),
-          fuelPerKgBenefit: 0.005,
+          fuelPerKgBenefit,
+          trackDegFactor: getTrackDegFactor(config),
         };
         let bestStrict = null;
         // evaluate across all pit windows and tyre assignments

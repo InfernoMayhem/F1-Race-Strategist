@@ -664,4 +664,11 @@ function generateStrategies(config, options = {}) {
   return { best: bestByStops, overallBest, meta: { algorithm:'multi-dp-constrained-wear+strict-fallback', variants: Object.keys(bestByStops).length } };
 }
 
-module.exports = { generateStrategies };
+module.exports = {
+  generateStrategies,
+  // Exporting internals for testing
+  generatePitCombos,
+  generateTyreAssignments,
+  evaluateStrictStrategy,
+  tyreData
+};

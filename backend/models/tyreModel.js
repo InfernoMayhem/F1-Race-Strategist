@@ -11,9 +11,11 @@ const BASE_COMPOUNDS = {
 
 // wear curve parameters per compound
 const WEAR_PARAMS = {
-  Soft:   { linear: 0.07, wearStart: 6,  beta: 0.10, gamma: 0.20, cliffStart: 16, cliffBeta: 0.20, cliffGamma: 0.25 },
+  // Soft: Slightly increased degradation curve for low/medium deg scenarios (Linear 0.07 -> 0.08)
+  Soft:   { linear: 0.08, wearStart: 6,  beta: 0.10, gamma: 0.20, cliffStart: 16, cliffBeta: 0.20, cliffGamma: 0.25 },
   Medium: { linear: 0.05, wearStart: 10, beta: 0.08, gamma: 0.18, cliffStart: 24, cliffBeta: 0.14, cliffGamma: 0.22 },
-  Hard:   { linear: 0.035,wearStart: 14, beta: 0.06, gamma: 0.16, cliffStart: 34, cliffBeta: 0.10, cliffGamma: 0.20 },
+  // Hard: Lower linear wear to reward long stints (0.035 -> 0.025)
+  Hard:   { linear: 0.025, wearStart: 16, beta: 0.05, gamma: 0.15, cliffStart: 38, cliffBeta: 0.08, cliffGamma: 0.18 },
   Intermediate: { linear: 0.06, wearStart: 8,  beta: 0.08, gamma: 0.18, cliffStart: 20, cliffBeta: 0.14, cliffGamma: 0.22 },
   Wet: { linear: 0.03, wearStart: 12, beta: 0.05, gamma: 0.14, cliffStart: 28, cliffBeta: 0.10, cliffGamma: 0.18 },
 };
@@ -75,14 +77,19 @@ function calcLapTimeWithWear({
   trackDegFactor = 1.0,
   maxStintLap = 35,
   rejectThresholdSec = 8,
+  outLapPenalty = 0, // penalty for lap 1 of stint (cold tyres)
 }) {
   const burnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
   const burnedKg = burnPerLap * (lapGlobal - 1);
   const fuelGain = fuelAdvantageSecondsLinear(burnedKg, fuelPerKgBenefit);
   const wearPenalty = tyreWearPenalty(compound, age, trackDegFactor, maxStintLap);
   const invalid = wearPenalty > rejectThresholdSec;
+  
+  // Apply out-lap penalty if age is 1
+  const warmup = (age === 1) ? outLapPenalty : 0;
+
   const time = invalid ? Number.POSITIVE_INFINITY
-                       : baseLapTime + baseOffset + wearPenalty - fuelGain;
+                       : baseLapTime + baseOffset + wearPenalty + warmup - fuelGain;
   return { time, wearPenalty, invalid };
 }
 

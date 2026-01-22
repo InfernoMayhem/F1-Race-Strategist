@@ -3,13 +3,14 @@ const { generateStrategies } = require('./models/strategyGenerator');
 // Configuration matching the user's request
 const config = {
   totalLaps: "57",
-  baseLapTime: "92",
+  baseLapTime: "95.2",
   fuelLoad: "110",
-  pitStopLoss: "20",
-  trackLength: "5.412",
-  degradation: "Medium",
-  temperature: "25",
-  totalRainfall: "0"
+  pitStopLoss: "21.5",
+  trackLength: "5.4",
+  degradation: "Low",
+  temperature: "20",
+  totalRainfall: "0",
+  outLapPenalty: "2.0" // Default warm-up penalty for testing low deg logic
 };
 
 console.log("Running strategy generation with config:", config);

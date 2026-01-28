@@ -44,7 +44,7 @@ export function getFieldValidators() {
       if (!raw.trim()) return 'Total Laps is required';
       const n = integer(raw);
       if (Number.isNaN(n)) return 'Total Laps must be an integer';
-      if (n < 1 || n > 100) return 'Total Laps must be 1-100';
+      if (n < 10 || n > 100) return 'Total Laps must be 10-100';
       return '';
     },
     trackLength: (el) => {
@@ -52,7 +52,7 @@ export function getFieldValidators() {
       if (!raw.trim()) return 'Track Length is required';
       const n = decimal(raw);
       if (Number.isNaN(n)) return 'Track Length must be a number';
-      if (n < 0.1 || n > 99.9) return 'Track Length must be 0.1-99.9';
+      if (n < 1.0 || n > 50.0) return 'Track Length must be 1.0-50.0 km';
       return '';
     },
     fuelLoad: (el) => {
@@ -60,7 +60,7 @@ export function getFieldValidators() {
       if (!raw.trim()) return 'Fuel Load is required';
       const n = integer(raw);
       if (Number.isNaN(n)) return 'Fuel Load must be an integer';
-      if (n < 1 || n > 150) return 'Fuel Load must be 1-150';
+      if (n < 10 || n > 150) return 'Fuel Load must be 10-150';
       return '';
     },
     degradation: (el) => {
@@ -83,7 +83,7 @@ export function getFieldValidators() {
       if (!raw.trim()) return 'Temperature is required';
       const n = integer(raw);
       if (Number.isNaN(n)) return 'Temperature must be an integer';
-      if (n < -10 || n > 50) return 'Temperature must be -10 to 50';
+      if (n < -10 || n > 50) return 'Temperature must be -10 to 50°C';
       return '';
     },
     baseLapTime: (el) => {
@@ -91,7 +91,7 @@ export function getFieldValidators() {
       if (!raw.trim()) return 'Base Lap Time is required';
       const n = integer(raw);
       if (Number.isNaN(n)) return 'Base Lap Time must be an integer';
-      if (n < 1 || n > 300) return 'Base Lap Time must be 1-300';
+      if (n < 30 || n > 150) return 'Base Lap Time must be 30-150s';
       return '';
     },
     pitStopLoss: (el) => {
@@ -99,7 +99,7 @@ export function getFieldValidators() {
       if (!raw.trim()) return 'Pit Stop Loss is required';
       const n = integer(raw);
       if (Number.isNaN(n)) return 'Pit Stop Loss must be an integer';
-      if (n < 1 || n > 60) return 'Pit Stop Loss must be 1-60';
+      if (n < 10 || n > 60) return 'Pit Stop Loss must be 10-60s';
       return '';
     },
   };

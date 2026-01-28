@@ -25,20 +25,20 @@
         <form id="raceForm" class="form-grid" novalidate>
           <div class="field">
             <label for="totalLaps">Total Laps</label>
-            <input type="text" id="totalLaps" name="totalLaps" placeholder="1-100" />
+            <input type="text" id="totalLaps" name="totalLaps" placeholder="10-100" />
           </div>
           <div class="field">
             <label for="fuelLoad">Fuel Load (kg)</label>
-            <input type="text" id="fuelLoad" name="fuelLoad" placeholder="1-150" />
+            <input type="text" id="fuelLoad" name="fuelLoad" placeholder="10-150" />
           </div>
 
           <div class="field">
             <label for="trackLength">Track Length (km)</label>
-            <input type="text" id="trackLength" name="trackLength" placeholder="0.1-99.9" />
+            <input type="text" id="trackLength" name="trackLength" placeholder="1.0-50.0" />
           </div>
           <div class="field">
-            <label for="baseLapTime">Base Lap Time (s)</label>
-            <input type="text" id="baseLapTime" name="baseLapTime" placeholder="1-300" />
+            <label for="baseLapTime">Base Lap Time (s) <span class="info-icon" data-tooltip="The lap time under perfect conditions with no fuel load or tyre wear">i</span></label>
+            <input type="text" id="baseLapTime" name="baseLapTime" placeholder="30-150" />
           </div>
 
           <div class="field">
@@ -47,11 +47,11 @@
           </div>
           <div class="field">
             <label for="pitStopLoss">Pit Stop Loss (s)</label>
-            <input type="text" id="pitStopLoss" name="pitStopLoss" placeholder="1-60" />
+            <input type="text" id="pitStopLoss" name="pitStopLoss" placeholder="10-60" />
           </div>
 
           <div class="field">
-            <label for="degradation">Degradation</label>
+            <label for="degradation">Tyre Degradation</label>
             <select id="degradation" name="degradation">
               <option value="" disabled selected>Choose</option>
               <option value="Low">Low</option>
@@ -85,7 +85,10 @@
       <!-- Bottom: Charts spanning full width -->
       <section class="panel panel-chart">
         <h2>Race Chart</h2>
-        <div class="chart-key"><span class="key-dot"></span> Pit stop</div>
+        <div class="chart-key">
+          <span class="key-item"><span class="key-dot"></span> Pit stop</span>
+          <span class="key-item"><span class="key-dot fastest"></span> Fastest Lap</span>
+        </div>
         <div class="charts-row">
           <div class="chart-box">
             <canvas id="lapChart"></canvas>

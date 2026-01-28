@@ -7,14 +7,20 @@ function registerAnnotation() {
   } catch (e) {}
 }
 
-function baseOptions(yTitle) {
+function baseOptions(yTitle, chartTitle) {
   return {
     responsive: true,
     maintainAspectRatio: false,
     interaction: { mode: 'index', intersect: false },
     plugins: {
       legend: { display: false },
-      title: { display: false },
+      title: { 
+        display: !!chartTitle, 
+        text: chartTitle,
+        color: '#e9e9e9',
+        font: { size: 14, weight: 'bold' },
+        padding: { bottom: 10 }
+      },
       tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.formattedValue}` } },
       annotation: { annotations: {} }
     },
@@ -29,15 +35,15 @@ export function ensureCharts() {
   registerAnnotation();
   if (!chartLap) {
     const c1 = document.getElementById('lapChart');
-    if (c1) chartLap = new window.Chart(c1, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Lap Time (s)') });
+    if (c1) chartLap = new window.Chart(c1, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Lap Time (s)', 'Lap Time Evolution') });
   }
   if (!chartFuel) {
     const c2 = document.getElementById('fuelChart');
-    if (c2) chartFuel = new window.Chart(c2, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Fuel Load (kg)') });
+    if (c2) chartFuel = new window.Chart(c2, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Fuel Load (kg)', 'Fuel Mass') });
   }
   if (!chartTyre) {
     const c3 = document.getElementById('tyreChart');
-    if (c3) chartTyre = new window.Chart(c3, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Tyre Wear (s penalty)') });
+    if (c3) chartTyre = new window.Chart(c3, { type: 'line', data: { labels: [], datasets: [] }, options: baseOptions('Tyre Wear (s penalty)', 'Tyre Degradation') });
   }
 }
 
@@ -51,6 +57,19 @@ export function renderStrategyCharts(strategy) {
   const fuelLoads = series.map(p => p.fuelLoad);
   const tyreWear = series.map(p => p.tyrePenalty);
   const pitSet = new Set((strategy.pitLaps || []).map(Number));
+  const fastLapNum = strategy.fastestLap ? strategy.fastestLap.lapNumber : -1;
+
+  const pointRadiusFunc = (ctx) => {
+    const l = labels[ctx.dataIndex];
+    if (l === fastLapNum) return 5;
+    if (pitSet.has(l)) return 3;
+    return 0;
+  };
+  const pointColorFunc = (ctx) => {
+    const l = labels[ctx.dataIndex];
+    if (l === fastLapNum) return '#d8b4fe';
+    return '#ff9a3c';
+  };
 
   const buildAnnotations = () => {
     const anns = {};
@@ -77,9 +96,10 @@ export function renderStrategyCharts(strategy) {
     backgroundColor: 'rgba(25,118,210,0.2)',
     tension: 0.3,
     fill: false,
-    pointRadius: (ctx) => pitSet.has(labels[ctx.dataIndex]) ? 3 : 0,
-    pointBackgroundColor: '#ff9a3c',
-    pointBorderColor: '#ff9a3c'
+    pointRadius: pointRadiusFunc,
+    pointBackgroundColor: pointColorFunc,
+    pointBorderColor: pointColorFunc,
+    pointHoverRadius: 6
   }];
   chartLap.options.plugins.annotation.annotations = buildAnnotations();
   chartLap.update();
@@ -92,9 +112,10 @@ export function renderStrategyCharts(strategy) {
     backgroundColor: 'rgba(46,125,50,0.2)',
     tension: 0.3,
     fill: false,
-    pointRadius: (ctx) => pitSet.has(labels[ctx.dataIndex]) ? 2 : 0,
-    pointBackgroundColor: '#ff9a3c',
-    pointBorderColor: '#ff9a3c'
+    pointRadius: pointRadiusFunc,
+    pointBackgroundColor: pointColorFunc,
+    pointBorderColor: pointColorFunc,
+    pointHoverRadius: 6
   }];
   chartFuel.options.plugins.annotation.annotations = buildAnnotations();
   chartFuel.update();
@@ -107,9 +128,10 @@ export function renderStrategyCharts(strategy) {
     backgroundColor: 'rgba(198,40,40,0.2)',
     tension: 0.3,
     fill: false,
-    pointRadius: (ctx) => pitSet.has(labels[ctx.dataIndex]) ? 2 : 0,
-    pointBackgroundColor: '#ff9a3c',
-    pointBorderColor: '#ff9a3c'
+    pointRadius: pointRadiusFunc,
+    pointBackgroundColor: pointColorFunc,
+    pointBorderColor: pointColorFunc,
+    pointHoverRadius: 6
   }];
   chartTyre.options.plugins.annotation.annotations = buildAnnotations();
   chartTyre.update();

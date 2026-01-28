@@ -19,7 +19,7 @@ function getTyreInfo(compound) {
 
 const fuelPerKgBenefit = 0.014;
 
-const MIN_STINT = 8;
+const MIN_STINT = 3;
 
 function calculateLapTime(lapNumber, stintLap, compound, params, currentFuelKg) {
   const info = getTyreInfo(compound);
@@ -272,6 +272,19 @@ function buildStrictStrategy(strictResult, config) {
     });
   });
 
+  // Calculate overall fastest lap
+  let fastestLap = null;
+  lapSeries.forEach(lap => {
+    if (!fastestLap || lap.time < fastestLap.time) {
+      fastestLap = {
+        time: lap.time,
+        lapNumber: lap.lap,
+        compound: lap.compound,
+        stintLap: lap.stintLap
+      };
+    }
+  });
+
   return {
     valid: true,
     totalTime: strictResult.totalTime,
@@ -279,33 +292,244 @@ function buildStrictStrategy(strictResult, config) {
     stints,
     lapSeries,
     fastestStint: fastest,
+    fastestLap: fastestLap,
     stops: strictResult.pitLaps ? strictResult.pitLaps.length : 0,
     pitLaps: strictResult.pitLaps || []
   };
 }
 
-// optimise for Stop Count with allowedCompounds
+// optimise for Stop Count with allowedCompounds using Dynamic Programming
 function optimiseForStopCount(params, stopCount, allowedCompounds) {
   const totalLaps = toNumber(params.totalLaps, 0);
   if (!Number.isFinite(totalLaps) || totalLaps < 1) throw new Error('totalLaps must be > 0');
-  const pitCombos = generatePitCombos(totalLaps, stopCount);
-  if (!pitCombos.length) return null;
-  const stintCount = stopCount + 1;
-  const tyreCombos = generateTyreAssignments(stintCount, allowedCompounds);
-  let best = null;
-  for (let p = 0; p < pitCombos.length; p++) {
-    const pits = pitCombos[p];
-    const stintRanges = stintsFromPits(totalLaps, pits);
-    for (let c = 0; c < tyreCombos.length; c++) {
-      const combo = tyreCombos[c];
-      if (!validateStintsWithCompounds(stintRanges, combo)) continue;
-      const sim = evaluateStrictStrategy(params, pits, combo);
-      if (!sim) continue;
-      if (!best || sim.totalTime < best.totalTime - 1e-9) best = sim;
+  
+  const numStints = stopCount + 1;
+  const initialFuel = toNumber(params.initialFuel, 0);
+  const fuelBurnPerLap = totalLaps > 0 ? initialFuel / totalLaps : 0;
+  const pitStopLoss = toNumber(params.pitStopLoss, 0);  
+
+  // Cache for stint costs to avoid re-calculating lap loop
+  const stintCostCache = new Map();
+
+  function getStintCost(startLap, length, compound) {
+    const key = `${startLap}-${length}-${compound}`;
+    if (stintCostCache.has(key)) return stintCostCache.get(key);
+    
+    const info = getTyreInfo(compound);
+    if (!info || length < MIN_STINT || length > info.maxUsefulLaps) {
+       stintCostCache.set(key, Infinity);
+       return Infinity;
     }
+
+    let time = 0;
+    // Calculate driving time for this stint
+    // Note: Replicates calculateLapTime calls from evaluateStrictStrategy.
+    // We do NOT add pitStopLoss here, it is added as transition cost.
+    for (let i = 1; i <= length; i++) {
+        const lapGlobal = startLap + i - 1;
+        if (lapGlobal > totalLaps) { time = Infinity; break; }
+
+        const currentFuelKg = Math.max(0, initialFuel - fuelBurnPerLap * (lapGlobal - 1));
+        const t = calculateLapTime(lapGlobal, i, compound, params, currentFuelKg);
+        time += t;
+    }
+    
+    stintCostCache.set(key, time);
+    return time;
   }
-  return best;
+
+  // DP State: dp[stintIndex][endLap][compound]
+  // Stores { diverse: { cost, prevEnd, prevComp }, uniform: { cost, prevEnd, prevComp } }
+  // diverse: path has used >= 2 compounds so far
+  // uniform: path has used only 1 compound so far
+  const dp = new Array(numStints + 1).fill(0).map(() => new Array(totalLaps + 1).fill(null));
+
+  // Initialize Stint 1
+  for (let lap = 1; lap <= totalLaps; lap++) {
+      if (lap < MIN_STINT) continue;
+      
+      for (const comp of allowedCompounds) {
+          const cost = getStintCost(1, lap, comp);
+          if (cost === Infinity) continue;
+          
+          if (!dp[1][lap]) dp[1][lap] = {};
+          dp[1][lap][comp] = {
+              uniform: { cost: cost, prevEnd: 0, prevComp: null },
+              diverse: null // 1 stint cannot have 2 compounds yet
+          };
+      }
+  }
+
+  // Iterate Stints 2..numStints
+  for (let k = 2; k <= numStints; k++) {
+      // Possible end laps for stint k
+      // Must be at least k * MIN_STINT
+      const minEnd = k * MIN_STINT;
+      
+      for (let lap = minEnd; lap <= totalLaps; lap++) {
+          
+          // Prev stint (k-1) must have ended at 'prev'
+          // Current stint length = lap - prev
+          // MIN_STINT <= length
+          // prev <= lap - MIN_STINT
+          // Also prev >= (k-1) * MIN_STINT
+          const maxPrev = lap - MIN_STINT;
+          const minPrev = (k - 1) * MIN_STINT;
+          
+          for (let prev = maxPrev; prev >= minPrev; prev--) {
+              // Check if valid previous state exists
+              if (!dp[k-1][prev]) continue;
+              
+              // Try current compounds
+              for (const currComp of allowedCompounds) {
+                  const segCost = getStintCost(prev + 1, lap - prev, currComp);
+                  if (segCost === Infinity) continue;
+
+                  const transitionCost = segCost + pitStopLoss;
+                  
+                  const prevDataVars = dp[k-1][prev]; // Map-like object of compounds
+                  
+                  // Iterate over all previous compounds to find best transitions
+                  for (const prevComp in prevDataVars) {
+                      const entry = prevDataVars[prevComp];
+                      if (!entry) continue;
+
+                      // 1. From Prev Uniform
+                      if (entry.uniform) {
+                          const newCost = entry.uniform.cost + transitionCost;
+                          const isNowDiverse = (currComp !== prevComp);
+                          const type = isNowDiverse ? 'diverse' : 'uniform';
+                          
+                          if (!dp[k][lap]) dp[k][lap] = {};
+                          if (!dp[k][lap][currComp]) dp[k][lap][currComp] = { uniform: null, diverse: null };
+                          
+                          const bestSoFar = dp[k][lap][currComp][type];
+                          if (!bestSoFar || newCost < bestSoFar.cost) {
+                              dp[k][lap][currComp][type] = {
+                                  cost: newCost,
+                                  prevEnd: prev,
+                                  prevComp: prevComp
+                              };
+                          }
+                      }
+                      
+                      // 2. From Prev Diverse (remains diverse)
+                      if (entry.diverse) {
+                          const newCost = entry.diverse.cost + transitionCost;
+                          if (!dp[k][lap]) dp[k][lap] = {};
+                          if (!dp[k][lap][currComp]) dp[k][lap][currComp] = { uniform: null, diverse: null };
+
+                          const bestSoFar = dp[k][lap][currComp].diverse;
+                          if (!bestSoFar || newCost < bestSoFar.cost) {
+                              dp[k][lap][currComp].diverse = {
+                                  cost: newCost,
+                                  prevEnd: prev,
+                                  prevComp: prevComp
+                              };
+                          }
+                      }
+                  }
+              }
+          }
+      }
+  }
+
+  // Find best result at dp[numStints][totalLaps] that is diverse
+  let bestTime = Infinity;
+  let bestEndState = null;
+  let bestFinalComp = null;
+  
+  const finalStates = dp[numStints][totalLaps];
+  if (finalStates) {
+      for (const comp in finalStates) {
+          const entry = finalStates[comp];
+          if (entry && entry.diverse) {
+              if (entry.diverse.cost < bestTime) {
+                  bestTime = entry.diverse.cost;
+                  bestEndState = entry.diverse;
+                  bestFinalComp = comp;
+              }
+          }
+      }
+  }
+
+  if (bestTime === Infinity || !bestEndState) return null;
+
+  // Reconstruct path
+  const compounds = [];
+  const pitLaps = [];
+  
+  let currStep = { ...bestEndState };
+  let currComp = bestFinalComp;
+  let currType = 'diverse'; // We verified it ended diverse
+  let currEnd = totalLaps;
+  
+  // Backtrack
+  // Stints k=numStints down to 1
+  for (let k = numStints; k >= 1; k--) {
+      compounds.unshift(currComp);
+      
+      const prevEnd = currStep.prevEnd;
+      const prevComp = currStep.prevComp;
+
+      if (k > 1) { 
+          pitLaps.unshift(prevEnd);
+      }
+      
+      // Determine if we came from diverse or uniform
+      if (k > 1) {
+          const prevEntry = dp[k-1][prevEnd][prevComp];
+          // We need to know if we used the 'diverse' or 'uniform' path of prev path.
+          // If we are currently 'uniform', we must have come from 'uniform' and comp==prevComp.
+          // If we are currently 'diverse':
+          //    If comp != prevComp, we could have come from uniform OR diverse.
+          //    But our DP update logic stored the BEST one.
+          //    Wait, my state storage doesn't explicitly save WHICH source type (div/uni) won.
+          //    It stores 'cost'. I can re-check the cost to decide.
+          
+          const costTransition = getStintCost(prevEnd + 1, currEnd - prevEnd, currComp) + pitStopLoss;
+          const expectedPrevCost = currStep.cost - costTransition;
+          
+          // Check uniform match (float tolerance)
+          if (prevEntry.uniform && Math.abs(prevEntry.uniform.cost - expectedPrevCost) < 1e-6) {
+             currType = 'uniform';
+             currStep = prevEntry.uniform;
+          } else if (prevEntry.diverse && Math.abs(prevEntry.diverse.cost - expectedPrevCost) < 1e-6) {
+             currType = 'diverse';
+             currStep = prevEntry.diverse;
+          } else {
+             // Fallback/Error? Should not happen if math is consistent.
+             // Maybe we transitioned from Uniform -> Diverse.
+             // If we are Diverse now, and comp != prevComp, it could be from Uniform.
+             const isDiff = (currComp !== prevComp);
+             if (isDiff && prevEntry.uniform && Math.abs(prevEntry.uniform.cost - expectedPrevCost) < 1e-6) {
+                 currType = 'uniform';
+                 currStep = prevEntry.uniform;
+             } else {
+                 currType = 'diverse'; // Default to diverse if ambiguous or strictly diverse
+                 currStep = prevEntry.diverse;
+             }
+          }
+      }
+      
+      currEnd = prevEnd;
+      currComp = prevComp;
+  }
+  
+  // pitLaps array contains the lap numbers where pits occur.
+  // evaluateStrictStrategy(params, pitLaps, compounds)
+  
+  // Note: pitLaps array length should be stopCount.
+  // My loop does k from numStints(stopCount+1) down to 1.
+  // It unshifts when k > 1. i.e. k=2,3,4...
+  // numStints=2 (1 stop). k=2 puts pitLap. k=1 done.
+  // Stops = 1. pitLaps length 1. Correct.
+  
+  return evaluateStrictStrategy(params, pitLaps, compounds);
 }
+
+// optimise for Stop Count with allowedCompounds using old logic (kept for reference/fallback if needed, but overwritten by above)
+// function optimiseForStopCount(params, stopCount, allowedCompounds) { ... }
 
 // generate strict strategy object
 function generateStrictStrategies(config) {

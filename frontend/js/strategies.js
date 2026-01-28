@@ -1,16 +1,5 @@
 import { renderStrategyCharts } from './charts.js';
 
-export function updateViewingLabel(stops) {
-  const el = document.getElementById('recommendedLabel');
-  if (!el) return;
-  if (stops == null) {
-    el.textContent = '(none)';
-  } else if (stops === 1) {
-    el.textContent = '1 stop';
-  } else {
-    el.textContent = `${stops} stops`;
-  }
-}
 
 export function formatTime(totalSeconds) {
   if (totalSeconds == null || !isFinite(totalSeconds)) return '—';
@@ -60,6 +49,7 @@ export function renderStrategyCards(bestByStops, overallBest, currentStops, onSe
     const totalTime = s.totalTime;
     const schedule = buildStintSchedule(s);
     const actualStopsInfo = (s.actualStops != null && s.actualStops !== stops) ? `<span class="pill">Actual: ${s.actualStops} stop${s.actualStops===1?'':'s'}</span>` : '';
+    const fastestLapInfo = s.fastestLap ? `<div class="sub-meta"><span class="fl-icon"></span> Fastest Lap: <strong>${s.fastestLap.time.toFixed(3)}s</strong> (L${s.fastestLap.lapNumber}, ${s.fastestLap.compound})</div>` : '';
 
     const card = document.createElement('div');
     card.className = `strategy-card${isSelected ? ' selected' : ''}`;
@@ -69,11 +59,13 @@ export function renderStrategyCards(bestByStops, overallBest, currentStops, onSe
         <div>
           <span class="pill">Pit laps: ${pitLaps.length ? pitLaps.join(', ') : '—'}</span>
           ${actualStopsInfo}
-          ${isSelected ? '<span class="pill viewing">Viewing</span>' : ''}
           ${isOptimal ? '<span class="pill opt">Optimal</span>' : ''}
         </div>
       </div>
-      <div class="meta"><div>Total time: <strong>${formatTime(totalTime)}</strong></div></div>
+      <div class="meta">
+          <div>Total time: <strong>${formatTime(totalTime)}</strong></div>
+      </div>
+      ${fastestLapInfo}
       <div class="schedule">${schedule.map((seg) => `<span class=\"seg\">${seg}</span>`).join('')}</div>
     `;
     card.addEventListener('click', () => onSelect(stops, s, card));

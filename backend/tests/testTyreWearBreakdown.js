@@ -1,6 +1,5 @@
 const { WEAR_PARAMS, tyreWearPenalty, getTrackDegFactor } = require('../models/tyreModel');
 
-// Configuration as requested
 const TEST_CONFIG = {
     degradation: 'Low',
     temperature: 20
@@ -8,7 +7,7 @@ const TEST_CONFIG = {
 
 const COMPOUND = 'Soft';
 const MAX_LAPS = 57;
-const MAX_STINT_LAP = 35; // default
+const MAX_STINT_LAP = 35;
 
 // Calculate deg factor once
 const degFactor = getTrackDegFactor(TEST_CONFIG);
@@ -97,17 +96,14 @@ for (let lap = 1; lap <= MAX_LAPS; lap++) {
         console.log(`\n[Lap ${lap} Analysis]`);
         console.log(`Total Wear: ${components.totalWear.toFixed(6)}s`);
         
-        // Explain Linear
         console.log(` - Linear Base: ${components.baseOrPreWearTerm.toFixed(6)} (param linear=${p.linear} * age ${lap})`);
         
-        // Explain Curve
         if (lap > p.wearStart) {
             console.log(` - Curve Part:  ${components.curveTerm.toFixed(6)} (ACTIVE: Age ${lap} > wearStart ${p.wearStart})`);
         } else {
             console.log(` - Curve Part:  0.000000 (INACTIVE: Age ${lap} <= wearStart ${p.wearStart})`);
         }
 
-        // Explain Cliff
         if (lap > p.cliffStart) {
             console.log(` - Cliff Part:  ${components.cliffTerm.toFixed(6)} (ACTIVE: Age ${lap} > cliffStart ${p.cliffStart})`);
         } else {

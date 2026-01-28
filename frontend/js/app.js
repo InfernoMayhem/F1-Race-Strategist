@@ -2,7 +2,7 @@ import { $ } from './dom.js';
 import { apiFetch } from './api.js';
 import { validateAll as validateAllFields, validateField as validateOneField } from './validation.js';
 import { renderStrategyCharts } from './charts.js';
-import { renderStrategyCards, updateViewingLabel, setStrategyStatus } from './strategies.js';
+import { renderStrategyCards, setStrategyStatus } from './strategies.js';
 import { initConfigModalBindings } from './modal.js';
 import { setRaceSetupTitle, currentLoadedConfigName, isPopulatingForm, setCurrentLoadedConfigName } from './state.js';
 
@@ -83,7 +83,6 @@ if (form) {
   function onSelectStops(stops, strategy, card) {
     currentStops = stops;
     renderStrategyCharts(strategy);
-    updateViewingLabel(currentStops);
     // re-render to update selection highlight
     renderStrategyCards(strategiesByStops, overallBestRef, currentStops, onSelectStops);
     if (card) { card.style.transform = 'scale(0.99)'; setTimeout(() => (card.style.transform = ''), 120); }
@@ -122,7 +121,6 @@ if (form) {
   // default render
   const strat = overallBestRef || strategiesByStops[currentStops] || strategiesByStops[3] || strategiesByStops[2] || strategiesByStops[1];
   renderStrategyCharts(strat);
-  updateViewingLabel(currentStops);
       if (!strat) setStrategyStatus('No valid strategies found for these inputs.');
     } catch (err) {
       console.error('Failed to fetch strategies', err);

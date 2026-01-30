@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// simple request logger
+// request logger
 app.use((req, res, next) => {
 	try {
 		console.log(new Date().toISOString(), req.method, req.originalUrl);
@@ -21,12 +21,12 @@ app.use((req, res, next) => {
 const distDir = path.join(__dirname, "..", "frontend", "dist");
 const serveFrontendFromBackend = process.env.SERVE_FRONTEND === '1' && fs.existsSync(distDir);
 
-// test api button functionality
+// api check
 app.get("/api/hello", (_req, res) => {
 	res.json({ message: "Backend is working!" });
 });
 
-// race config storage
+// imports
 const { calculateLapTimes } = require("./models/calculateLapTimes");
 const { generateStrategies } = require("./models/strategyGenerator");
 const { saveConfig: dbSaveConfig, listConfigs: dbListConfigs, getConfig: dbGetConfig } = require("./models/configStore");
@@ -53,7 +53,7 @@ app.post("/api/race-config", (req, res) => {
 	res.status(201).json({ ok: true, saved: cfg });
 });
 
-// calculate lap times using the config supplied in the body
+// calculate laps endpoint
 app.post("/api/calculate-laps", (req, res) => {
 	const cfg = req.body;
 	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
@@ -66,7 +66,7 @@ app.post("/api/calculate-laps", (req, res) => {
 	}
 });
 
-// generate strategies
+// strategies endpoint
 app.post("/api/generate-strategies", (req, res) => {
 	const cfg = req.body;
 	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
@@ -79,8 +79,8 @@ app.post("/api/generate-strategies", (req, res) => {
 	}
 });
 
-// saved configs api (sqlite)
-// save a config by name
+// config storage endpoints
+// save config
 app.post("/api/configs", (req, res) => {
 	const { name, config } = req.body || {};
 	if (!name || typeof name !== 'string' || !name.trim()) {
@@ -101,7 +101,7 @@ app.post("/api/configs", (req, res) => {
 	}
 });
 
-// list saved config names
+// list configs
 app.get("/api/configs", (_req, res) => {
 	try {
 		const items = dbListConfigs();
@@ -112,7 +112,7 @@ app.get("/api/configs", (_req, res) => {
 	}
 });
 
-// get a specific config by name
+// get config by name
 app.get("/api/configs/:name", (req, res) => {
 	const name = req.params.name;
 	if (!name) return res.status(400).json({ error: 'Name required' });
@@ -148,7 +148,7 @@ const BASE_PORT = Number.isFinite(requestedPort) && requestedPort > 0 ? requeste
 const explicitFallbackFlag = process.env.PORT_FALLBACK && process.env.PORT_FALLBACK !== '0';
 const fallbackAttempts = explicitFallbackFlag ? 20 : 0;
 
-// startup that auto-falls back to the next available port if in use
+// auto-fallback startup
 function startWithFallback(startPort, maxTries = 20) {
 	let port = startPort;
 	const server = http.createServer(app);

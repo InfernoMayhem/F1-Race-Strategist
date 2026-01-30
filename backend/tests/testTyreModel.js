@@ -1,4 +1,4 @@
-const { calcLapTimeWithWear, getTrackDegFactor, BASE_COMPOUNDS } = require('./models/tyreModel');
+const { calcLapTimeWithWear, getTrackDegFactor, BASE_COMPOUNDS } = require('../models/tyreModel');
 
 const TEST_CONFIG = {
   degradation: 'High',

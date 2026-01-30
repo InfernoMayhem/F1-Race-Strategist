@@ -23,9 +23,8 @@ async function getBaseUrl() {
     return cachedBaseUrl;
   }
 
-  // if not dev/file, assume we are served by the backend or a proxy
   if (!IS_DEV_OR_FILE) {
-    cachedBaseUrl = ''; // relative url
+    cachedBaseUrl = ''; 
     return cachedBaseUrl;
   }
 

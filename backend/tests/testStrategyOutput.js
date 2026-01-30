@@ -1,6 +1,6 @@
-const { generateStrategies } = require('./models/strategyGenerator');
+const { generateStrategies } = require('../models/strategyGenerator');
 
-// Configuration matching the user's request
+// configuration matching the user's request
 const config = {
   totalLaps: "57",
   baseLapTime: "95.2",
@@ -10,7 +10,7 @@ const config = {
   degradation: "Low",
   temperature: "20",
   totalRainfall: "0",
-  outLapPenalty: "2.0" // Default warm-up penalty for testing low deg logic
+  outLapPenalty: "2.0" // default warm-up penalty for testing low deg logic
 };
 
 console.log("Running strategy generation with config:", config);
@@ -22,7 +22,7 @@ if (!result || !result.best) {
   process.exit(1);
 }
 
-// Pick the best overall strategy, or specifically the 2-stop if available
+// pick the best overall strategy, or specifically the 2-stop if available
 const strategy = result.best['2'] || result.overallBest;
 
 if (!strategy) {

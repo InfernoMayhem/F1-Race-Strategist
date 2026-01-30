@@ -3,9 +3,9 @@ const {
   generateTyreAssignments,
   evaluateStrictStrategy,
   tyreData
-} = require('./models/strategyGenerator');
+} = require('../models/strategyGenerator');
 
-const { getTrackDegFactor } = require('./models/tyreModel');
+const { getTrackDegFactor } = require('../models/tyreModel');
 
 //
 const CONFIG = {

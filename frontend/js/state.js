@@ -1,5 +1,5 @@
 export const DEFAULT_RACE_SETUP_TITLE = 'Race Setup';
-export let currentLoadedConfigName = null; // name of the currently loaded saved config
+export let currentLoadedConfigName = null;
 export let isPopulatingForm = false;
 
 export function setCurrentLoadedConfigName(name) {

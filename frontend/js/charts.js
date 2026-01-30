@@ -1,4 +1,4 @@
-  let chartLap, chartFuel, chartTyre;
+let chartLap, chartFuel, chartTyre;
 
 function registerAnnotation() {
   try {

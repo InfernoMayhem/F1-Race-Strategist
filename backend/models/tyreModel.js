@@ -9,12 +9,10 @@ const BASE_COMPOUNDS = {
   Wet: { baseOffset: 5.0 },
 };
 
-// wear curve parameters per compound
+// wear params
 const WEAR_PARAMS = {
-  // Soft: Slightly increased degradation curve for low/medium deg scenarios (Linear 0.07 -> 0.08)
   Soft:   { linear: 0.08, wearStart: 6,  beta: 0.10, gamma: 0.20, cliffStart: 16, cliffBeta: 0.20, cliffGamma: 0.25 },
   Medium: { linear: 0.05, wearStart: 10, beta: 0.08, gamma: 0.18, cliffStart: 24, cliffBeta: 0.14, cliffGamma: 0.22 },
-  // Hard: Lower linear wear to reward long stints (0.035 -> 0.025)
   Hard:   { linear: 0.025, wearStart: 16, beta: 0.05, gamma: 0.15, cliffStart: 38, cliffBeta: 0.08, cliffGamma: 0.18 },
   Intermediate: { linear: 0.06, wearStart: 8,  beta: 0.08, gamma: 0.18, cliffStart: 20, cliffBeta: 0.14, cliffGamma: 0.22 },
   Wet: { linear: 0.03, wearStart: 12, beta: 0.05, gamma: 0.14, cliffStart: 28, cliffBeta: 0.10, cliffGamma: 0.18 },
@@ -38,33 +36,34 @@ function getTrackDegFactor(config) {
   return Math.max(0.5, Math.min(2.5, factor));
 }
 
-// non-linear per-lap tyre wear penalty in seconds, increasing with age
+// tyre wear calculator
 function tyreWearPenalty(compound, stintLapAge, trackDegFactor = 1.0, maxStintLap = 35) {
   const p = WEAR_PARAMS[compound] || WEAR_PARAMS.Medium;
   const age = Math.max(1, stintLapAge);
-  // base linear build-up
-  let penalty = p.linear * age;
-  // exponential after wearStart
+  
+  let penalty = p.linear * age; // base
+  
+  // exponential
   if (age > p.wearStart) {
     penalty += p.beta * (Math.exp(p.gamma * (age - p.wearStart)) - 1);
   }
-  // cliff region
+  // cliff
   if (age > p.cliffStart) {
     penalty += p.cliffBeta * (Math.exp(p.cliffGamma * (age - p.cliffStart)) - 1);
   }
-  // very long stints get huge penalties beyond maxStintLap
+  // max stint penalty
   if (age > maxStintLap) {
     penalty += Math.pow(1.25, age - maxStintLap) * 5;
   }
   return penalty * trackDegFactor;
 }
 
-// linear fuel weight effect
+// fuel effect
 function fuelAdvantageSecondsLinear(fuelBurnedKg, fuelPerKgBenefit) {
   return fuelPerKgBenefit * Math.max(0, fuelBurnedKg);
 }
 
-// lap time generator using new tyre model; returns { time, wearPenalty, invalid }
+// lap calculator
 function calcLapTimeWithWear({
   compound,
   age,
@@ -77,7 +76,7 @@ function calcLapTimeWithWear({
   trackDegFactor = 1.0,
   maxStintLap = 35,
   rejectThresholdSec = 8,
-  outLapPenalty = 0, // penalty for lap 1 of stint (cold tyres)
+  outLapPenalty = 0,
 }) {
   const burnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
   const burnedKg = burnPerLap * (lapGlobal - 1);
@@ -85,7 +84,7 @@ function calcLapTimeWithWear({
   const wearPenalty = tyreWearPenalty(compound, age, trackDegFactor, maxStintLap);
   const invalid = wearPenalty > rejectThresholdSec;
   
-  // Apply out-lap penalty if age is 1
+  // out lap penalty
   const warmup = (age === 1) ? outLapPenalty : 0;
 
   const time = invalid ? Number.POSITIVE_INFINITY

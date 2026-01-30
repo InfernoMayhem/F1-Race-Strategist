@@ -19,30 +19,27 @@ console.log(`Params for ${COMPOUND}:`, WEAR_PARAMS[COMPOUND]);
 console.log(`Note: wearStart=${WEAR_PARAMS[COMPOUND].wearStart}, cliffStart=${WEAR_PARAMS[COMPOUND].cliffStart}`);
 console.log('---------------------------------------------------\n');
 
-// ---------------------------------------------------------
-// Re-implementation for breakdown (must match tyreModel.js)
-// ---------------------------------------------------------
 function getWearComponents(compound, lapAge, factor) {
     const p = WEAR_PARAMS[compound];
     const age = Math.max(1, lapAge);
 
-    // Term 1: Linear Base (Contributes from Lap 1)
+    // term 1: linear base (contributes from lap 1)
     // "baseOrPreWearTerm" per user request
     const linearBase = p.linear * age;
 
-    // Term 2: Curve / Exponential (Contributes after wearStart)
+    // term 2: curve / exponential (contributes after wearStart)
     let curveTerm = 0;
     if (age > p.wearStart) {
         curveTerm = p.beta * (Math.exp(p.gamma * (age - p.wearStart)) - 1);
     }
 
-    // Term 3: Cliff (Contributes after cliffStart)
+    // term 3: cliff (contributes after cliffStart)
     let cliffTerm = 0;
     if (age > p.cliffStart) {
         cliffTerm = p.cliffBeta * (Math.exp(p.cliffGamma * (age - p.cliffStart)) - 1);
     }
     
-    // Term 4: Max Stint (Unlikely in this test range but part of model)
+    // term 4: max stint
     let maxStintTerm = 0;
     if (age > MAX_STINT_LAP) {
         maxStintTerm = Math.pow(1.25, age - MAX_STINT_LAP) * 5;
@@ -61,27 +58,24 @@ function getWearComponents(compound, lapAge, factor) {
     };
 }
 
-// ---------------------------------------------------------
-// Execution Loop
-// ---------------------------------------------------------
 const tableData = [];
 const p = WEAR_PARAMS[COMPOUND];
 const keyLaps = [1, 5, p.wearStart, p.wearStart + 1, 10, p.cliffStart, p.cliffStart + 1];
 
 for (let lap = 1; lap <= MAX_LAPS; lap++) {
-    // 1. Get components
+    // get components
     const components = getWearComponents(COMPOUND, lap, degFactor);
 
-    // 2. Get production value
+    // get production value
     const productionVal = tyreWearPenalty(COMPOUND, lap, degFactor, MAX_STINT_LAP);
 
-    // 3. Assert equality
+    // assert equality
     const diff = Math.abs(components.totalWear - productionVal);
     if (diff > 1e-6) {
         console.warn(`WARNING: Mismatch at lap ${lap}. Test=${components.totalWear}, Prod=${productionVal}, Diff=${diff}`);
     }
 
-    // 4. Store for table
+    // store for table
     tableData.push({
         lap: components.lap,
         totalWear: components.totalWear.toFixed(6),
@@ -91,7 +85,7 @@ for (let lap = 1; lap <= MAX_LAPS; lap++) {
         'DegFactor': components.degFactorUsed
     });
 
-    // 5. Detailed Breakdown for Key Laps
+    // detailed breakdown for key laps
     if (keyLaps.includes(lap)) {
         console.log(`\n[Lap ${lap} Analysis]`);
         console.log(`Total Wear: ${components.totalWear.toFixed(6)}s`);

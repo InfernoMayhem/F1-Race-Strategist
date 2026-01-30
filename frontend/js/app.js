@@ -6,7 +6,7 @@ import { renderStrategyCards, setStrategyStatus } from './strategies.js';
 import { initConfigModalBindings } from './modal.js';
 import { setRaceSetupTitle, currentLoadedConfigName, isPopulatingForm, setCurrentLoadedConfigName } from './state.js';
 
-// test api and display result
+// test api
 const testBtn = $("testBtn");
 if (testBtn) {
   testBtn.addEventListener("click", async () => {
@@ -24,13 +24,13 @@ if (testBtn) {
   });
 }
 
-// form validation and submission
+// validation and submission
 const form = $("raceForm");
 if (form) {
   const validateField = (id) => validateOneField(id);
   const validateAll = () => validateAllFields();
 
-  // live validation
+  // validation listeners
   form.addEventListener("input", (e) => {
     const t = e.target;
     if (t && t.id) validateField(t.id);
@@ -118,7 +118,7 @@ if (form) {
       currentStops = recommendedStops;
       renderStrategyCards(strategiesByStops, overallBestRef, currentStops, onSelectStops);
 
-  // default render
+  // default view
   const strat = overallBestRef || strategiesByStops[currentStops] || strategiesByStops[3] || strategiesByStops[2] || strategiesByStops[1];
   renderStrategyCharts(strat);
       if (!strat) setStrategyStatus('No valid strategies found for these inputs.');
@@ -131,7 +131,7 @@ if (form) {
   }
 
 
-  // submit validation
+  // submit handler
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const errors = validateAll();
@@ -141,7 +141,7 @@ if (form) {
       if (results) results.textContent = "Please correct the highlighted fields.";
       return;
     }
-    // build raceConfig from inputs
+    // build raceConfig
     const raceConfig = {
       totalLaps: $("totalLaps").value,
       trackLength: $("trackLength").value,
@@ -176,7 +176,7 @@ if (form) {
       if (!calcData?.ok) throw new Error("Calculation failed");
       renderResults(calcData.laps || []);
 
-      // get strategies and draw charts
+      // strategies
       await fetchAndRenderStrategies(window.raceConfig);
     } catch (err) {
       console.error("Failed to save raceConfig", err);
@@ -187,7 +187,7 @@ if (form) {
   });
 }
 
-// save and load UI
+// modal logic
 function getModalEls(){
   return {
     modal: document.getElementById('configModal'),
@@ -226,7 +226,6 @@ function populateFormFromConfig(cfg = {}) {
   set('temperature', cfg.temperature);
   set('baseLapTime', cfg.baseLapTime);
   set('pitStopLoss', cfg.pitStopLoss);
-  // allow a tick for any bound listeners to finish before enabling edits to clear title
   setTimeout(() => { isPopulatingForm = false; }, 0);
 }
 

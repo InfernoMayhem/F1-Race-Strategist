@@ -37,12 +37,12 @@ body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, 
   margin-bottom: 8px; padding: 6px 10px; width: max-content; max-width: 200px;
   background: rgba(10,10,12,0.95); border: 1px solid rgba(255,154,60,0.3);
   border-radius: 6px; font-size: 11px; line-height: 1.4; color: #e0e0e0;
-  box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none; z-index: 1000;
+  box-shadow: 0 4px 14px rgba(0,0,0,0.5); pointer-events: none; z-index: 10;
   text-align: center; white-space: normal;
 }
 .form-grid input, .form-grid select{ width:100%; padding:10px 10px; border:1px solid rgba(255,255,255,0.18); border-radius:10px; background: rgba(16,16,20,0.6); color:#e9e9e9; height:40px; outline:none; transition: box-shadow .2s, border-color .2s, background .2s; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
 .form-grid input:focus, .form-grid select:focus{ border-color: rgba(255,154,60,0.7); box-shadow: 0 0 0 3px rgba(255,154,60,0.22), 0 12px 30px rgba(0,0,0,0.25); background: rgba(16,16,20,0.75); }
-.panel-setup{ padding:16px 16px 10px; position: relative; z-index: 20; }
+.panel-setup{ padding:16px 16px 10px; }
 .muted{ opacity:0.8; font-weight:400; }
 .input-error{ border-color:#ff5f5f !important; outline: 0; box-shadow: 0 0 0 3px rgba(255,95,95,0.2); }
 .error-text{ color:#ff9d9d; font-size:12px; margin-top:4px; min-height: 14px; }
@@ -72,8 +72,6 @@ body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, 
 .strategy-card .pill.viewing{ background: rgba(75,34,12,0.9); color:#ffb077; border-color:#8a4a1d; box-shadow: 0 0 12px rgba(255,154,60,0.22) inset; }
 .strategy-card .pill.opt{ background: rgba(88, 28, 135, 0.9); color:#e9d5ff; border-color:#d8b4fe; box-shadow: 0 0 12px rgba(216, 180, 254, 0.25) inset; }
 .strategy-card .meta{ display:flex; gap:14px; font-size:13px; opacity:0.9; }
-.strategy-card .sub-meta{ font-size:13px; opacity:0.9; display:flex; align-items:center; gap:6px; color:#d8b4fe; }
-.strategy-card .fl-icon{ color:#d8b4fe; font-size:14px; }
 .strategy-card .schedule{ display:flex; gap:6px; flex-wrap:wrap; font-size:13px; }
 .strategy-card .schedule .seg{ background: rgba(30,30,34,0.8); padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); }
 
@@ -81,10 +79,8 @@ body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, 
 .results-pre{ background:#2b2b2b; border:1px solid #4a4a4a; border-radius:6px; padding:10px; min-height:150px; overflow:auto; }
 
 /* chart key */
-.chart-key{ margin: 6px 0 10px; opacity:0.85; font-size:12px; display:flex; align-items:center; gap:16px; }
-.key-item { display:flex; align-items:center; gap:6px; }
+.chart-key{ margin: 6px 0 10px; opacity:0.85; font-size:12px; display:flex; align-items:center; gap:6px; }
 .chart-key .key-dot{ width:8px; height:8px; border-radius:999px; background:#ff8a00; box-shadow: 0 0 10px rgba(255,138,0,0.35); display:inline-block; }
-.chart-key .key-dot.fastest{ background:#d8b4fe; box-shadow: 0 0 10px rgba(216, 180, 254, 0.45); }
 
 /* responsive */
 @media (max-width: 1000px){

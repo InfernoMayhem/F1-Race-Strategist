@@ -1,4 +1,4 @@
-let chartLap, chartFuel, chartTyre;
+  let chartLap, chartFuel, chartTyre;
 
 function registerAnnotation() {
   try {
@@ -101,7 +101,9 @@ export function renderStrategyCharts(strategy) {
     pointBorderColor: pointColorFunc,
     pointHoverRadius: 6
   }];
-  chartLap.options.plugins.annotation.annotations = buildAnnotations();
+  if (chartLap.options.plugins.annotation) {
+    chartLap.options.plugins.annotation.annotations = buildAnnotations();
+  }
   chartLap.update();
 
   chartFuel.data.labels = labels;
@@ -117,7 +119,9 @@ export function renderStrategyCharts(strategy) {
     pointBorderColor: pointColorFunc,
     pointHoverRadius: 6
   }];
-  chartFuel.options.plugins.annotation.annotations = buildAnnotations();
+  if (chartFuel.options.plugins.annotation) {
+    chartFuel.options.plugins.annotation.annotations = buildAnnotations();
+  }
   chartFuel.update();
 
   chartTyre.data.labels = labels;
@@ -133,6 +137,8 @@ export function renderStrategyCharts(strategy) {
     pointBorderColor: pointColorFunc,
     pointHoverRadius: 6
   }];
-  chartTyre.options.plugins.annotation.annotations = buildAnnotations();
+  if (chartTyre.options.plugins.annotation) {
+    chartTyre.options.plugins.annotation.annotations = buildAnnotations();
+  }
   chartTyre.update();
 }

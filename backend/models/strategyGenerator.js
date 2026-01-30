@@ -440,6 +440,8 @@ function optimiseForStopCount(params, stopCount, allowedCompounds) {
   let bestFinalComp = null;
   
   const finalStates = dp[numStints][totalLaps];
+  
+  // Find best result at dp[numStints][totalLaps] that is diverse
   if (finalStates) {
       for (const comp in finalStates) {
           const entry = finalStates[comp];

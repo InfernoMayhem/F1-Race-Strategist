@@ -9,7 +9,7 @@ const COMPOUND = 'Soft';
 const MAX_LAPS = 57;
 const MAX_STINT_LAP = 35;
 
-// Calculate deg factor once
+// calculate deg factor once
 const degFactor = getTrackDegFactor(TEST_CONFIG);
 console.log(`\n--- Tyre Model Breakdown Test ---`);
 console.log(`Compound: ${COMPOUND}`);
@@ -23,23 +23,23 @@ function getWearComponents(compound, lapAge, factor) {
     const p = WEAR_PARAMS[compound];
     const age = Math.max(1, lapAge);
 
-    // term 1: linear base (contributes from lap 1)
+    // linear base (contributes from lap 1)
     // "baseOrPreWearTerm" per user request
     const linearBase = p.linear * age;
 
-    // term 2: curve / exponential (contributes after wearStart)
+    // curve / exponential (contributes after wearStart)
     let curveTerm = 0;
     if (age > p.wearStart) {
         curveTerm = p.beta * (Math.exp(p.gamma * (age - p.wearStart)) - 1);
     }
 
-    // term 3: cliff (contributes after cliffStart)
+    // cliff (contributes after cliffStart)
     let cliffTerm = 0;
     if (age > p.cliffStart) {
         cliffTerm = p.cliffBeta * (Math.exp(p.cliffGamma * (age - p.cliffStart)) - 1);
     }
     
-    // term 4: max stint
+    // max stint
     let maxStintTerm = 0;
     if (age > MAX_STINT_LAP) {
         maxStintTerm = Math.pow(1.25, age - MAX_STINT_LAP) * 5;

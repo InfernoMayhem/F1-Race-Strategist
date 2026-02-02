@@ -9,13 +9,13 @@ const EXPLICIT_BASE = (typeof window !== 'undefined' && window.__BACKEND_BASE__)
   ? window.__BACKEND_BASE__.trim()
   : '';
 
-// cache the working base url so we don't scan every time
+// cache the working base url so it doesn't scan every time
 let cachedBaseUrl = null;
 
 // helper to find the running backend
-// 1. if explicit base is set, use it
-// 2. if we are served from the backend (same origin), use relative path
-// 3. if dev/file, scan localhost ports (5500-5510, 5000-5010)
+// if explicit base is set, use it
+// if it is served from the backend (same origin), use relative path
+// if dev/file, scan localhost ports (5500-5510, 5000-5010)
 async function getBaseUrl() {
   if (cachedBaseUrl !== null) return cachedBaseUrl;
   if (EXPLICIT_BASE) {

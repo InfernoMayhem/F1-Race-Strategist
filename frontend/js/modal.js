@@ -1,4 +1,5 @@
 import { apiFetch } from './api.js';
+import { validateAll } from './validation.js';
 import { setRaceSetupTitle, setCurrentLoadedConfigName, setIsPopulatingForm } from './state.js';
 
 export function getModalEls(){
@@ -60,6 +61,14 @@ export async function showSaveModal() {
 
   cancel.addEventListener('click', closeModal);
   save.addEventListener('click', async () => {
+    // validate before saving
+    const errors = validateAll();
+    if (Object.keys(errors).length > 0) {
+      alert('Cannot save: The race configuration has invalid fields. Please correct them and try again.');
+      closeModal();
+      return;
+    }
+
     const name = (document.getElementById('saveNameInput')?.value || '').trim();
     if (!name) { input.focus(); input.classList.add('input-error'); return; }
     const config = buildCurrentConfigFromForm();
@@ -104,8 +113,18 @@ export async function showLoadModal() {
     }
     items.forEach(item => {
       const row = document.createElement('div'); row.className = 'config-item';
-      row.innerHTML = `<div class="name">${item.name}</div><div class="time">${fmtTime(item.createdAt)}</div>`;
-      row.addEventListener('click', async () => {
+      
+      const info = document.createElement('div'); info.className = 'config-info';
+      info.innerHTML = `<div class="name">${item.name}</div><div class="time">${fmtTime(item.createdAt)}</div>`;
+      
+      const delBtn = document.createElement('button');
+      delBtn.className = 'delete-btn';
+      delBtn.innerHTML = '&times;';
+      delBtn.title = 'Delete';
+
+      row.append(info, delBtn);
+
+      const loadConfig = async () => {
         try {
           const r = await apiFetch(`/api/configs/${encodeURIComponent(item.name)}`);
           if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -118,6 +137,39 @@ export async function showLoadModal() {
         } catch (e) {
           console.error('Load failed', e);
           alert('Failed to load config.');
+        }
+      };
+
+      row.addEventListener('click', loadConfig);
+
+      delBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (delBtn.classList.contains('confirm-state')) {
+          try {
+            const res = await apiFetch(`/api/configs/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            row.remove();
+            if (list.children.length === 0) {
+              const empty = document.createElement('div'); empty.className = 'empty-note'; empty.textContent = 'No saved configurations yet.';
+              list.append(empty);
+            }
+          } catch (err) {
+            console.error('Delete failed', err);
+            alert('Failed to delete config.');
+            // reset button state on failure
+            delBtn.classList.remove('confirm-state');
+            delBtn.innerHTML = '&times;';
+          }
+        } else {
+          delBtn.classList.add('confirm-state');
+          delBtn.textContent = 'Confirm?';
+          // auto-reset after 3 seconds if not confirmed
+          setTimeout(() => {
+            if (delBtn.isConnected && delBtn.classList.contains('confirm-state')) {
+              delBtn.classList.remove('confirm-state');
+              delBtn.innerHTML = '&times;';
+            }
+          }, 3000);
         }
       });
       list.append(row);

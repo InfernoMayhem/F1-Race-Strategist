@@ -29,7 +29,12 @@ app.get("/api/hello", (_req, res) => {
 // imports
 const { calculateLapTimes } = require("./models/calculateLapTimes");
 const { generateStrategies } = require("./models/strategyGenerator");
-const { saveConfig: dbSaveConfig, listConfigs: dbListConfigs, getConfig: dbGetConfig } = require("./models/configStore");
+const { 
+	saveConfig: dbSaveConfig, 
+	listConfigs: dbListConfigs, 
+	getConfig: dbGetConfig,
+	deleteConfig: dbDeleteConfig 
+} = require("./models/configStore");
 
 app.post("/api/race-config", (req, res) => {
 	const cfg = req.body || {};
@@ -123,6 +128,20 @@ app.get("/api/configs/:name", (req, res) => {
 	} catch (e) {
 		console.error('Failed to get config', e);
 		return res.status(500).json({ error: 'Failed to get config' });
+	}
+});
+
+// delete config
+app.delete("/api/configs/:name", (req, res) => {
+	const name = req.params.name;
+	if (!name) return res.status(400).json({ error: 'Name required' });
+	try {
+		const deleted = dbDeleteConfig(name);
+		if (!deleted) return res.status(404).json({ error: 'Not found' });
+		return res.json({ ok: true, deleted: true });
+	} catch (e) {
+		console.error('Failed to delete config', e);
+		return res.status(500).json({ error: 'Failed to delete config' });
 	}
 });
 

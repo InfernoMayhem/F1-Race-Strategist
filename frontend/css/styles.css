@@ -106,6 +106,11 @@ body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, 
 .config-item:hover{ background: rgba(35,39,48,0.85); box-shadow: 0 4px 14px rgba(0,0,0,0.45); }
 .config-item .name{ font-weight:600; letter-spacing:0.3px; }
 .config-item .time{ font-size:12px; opacity:0.75; }
+.config-item .config-info { display: flex; flex-direction: column; gap: 2px; }
+.config-item .delete-btn { background: transparent; border: none; font-size: 18px; color: #cc3333; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: color 0.15s, background 0.15s; margin-left: 10px; }
+.config-item .delete-btn:hover { color: #ff5555; background: rgba(255, 85, 85, 0.15); }
+.config-item .delete-btn.confirm-state { background: #cc3333; color: white; font-size: 13px; font-weight: 600; padding: 6px 10px; }
+.config-item .delete-btn.confirm-state:hover { background: #ff4444; }
 .empty-note{ font-size:13px; opacity:0.8; padding:4px 2px; }
 .feedback-text{ font-size:13px; font-weight:600; letter-spacing:0.4px; background: linear-gradient(90deg,#ffd05e,#ff8a00,#ff4e8a); -webkit-background-clip:text; background-clip:text; color:transparent; }
 

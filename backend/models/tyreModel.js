@@ -41,6 +41,7 @@ function tyreWearPenalty(compound, stintLapAge, trackDegFactor = 1.0, maxStintLa
   const p = WEAR_PARAMS[compound] || WEAR_PARAMS.Medium;
   const age = Math.max(1, stintLapAge);
   
+  // linear
   let penalty = p.linear * age; // base
   
   // exponential

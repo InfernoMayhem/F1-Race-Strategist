@@ -6,7 +6,20 @@ import { renderStrategyCards, setStrategyStatus } from './strategies.js';
 import { initConfigModalBindings } from './modal.js';
 import { setRaceSetupTitle, currentLoadedConfigName, isPopulatingForm, setCurrentLoadedConfigName } from './state.js';
 
-// test api
+// helper function to manage the global loading spinner overlay
+function showLoading(text){
+  const overlay = document.getElementById('loadingOverlay');
+  const label = document.getElementById('loadingText');
+  if (label && text) label.textContent = text;
+  if (overlay) overlay.classList.remove('hidden');
+}
+
+function hideLoading(){
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.classList.add('hidden');
+}
+
+// simple diagnostics check to verify backend connectivity
 const testBtn = $("testBtn");
 if (testBtn) {
   testBtn.addEventListener("click", async () => {
@@ -24,21 +37,25 @@ if (testBtn) {
   });
 }
 
-// validation and submission
+// main application logic
 const form = $("raceForm");
 if (form) {
   const validateField = (id) => validateOneField(id);
   const validateAll = () => validateAllFields();
 
-  // validation listeners
+  // listen for real-time input changes to validate fields immediately
   form.addEventListener("input", (e) => {
     const t = e.target;
     if (t && t.id) validateField(t.id);
+    
+    // clear the title to indicate it's now a custom unsaved setup
     if (!isPopulatingForm && currentLoadedConfigName) {
       setCurrentLoadedConfigName(null);
       setRaceSetupTitle();
     }
   });
+  
+  // also check on change events
   form.addEventListener("change", (e) => {
     const t = e.target;
     if (t && t.id) validateField(t.id);
@@ -48,6 +65,7 @@ if (form) {
     }
   });
 
+  // display the raw lap time calculation results
   const renderResults = (laps) => {
     const results = $("resultsOutput");
     if (!results) return;
@@ -75,32 +93,27 @@ if (form) {
     ].join("\n");
   };
 
+  // state variables for the strategy selection UI
   let strategiesByStops = {};
-  let recommendedStops = null; // used for initial selection
-  let currentStops = null; // currently viewed strategy
+  let recommendedStops = null; 
+  let currentStops = null; 
   let overallBestRef = null;
 
+  // handle user clicking on a strategy card
   function onSelectStops(stops, strategy, card) {
     currentStops = stops;
+    
+    // update the main chart
     renderStrategyCharts(strategy);
-    // re-render to update selection highlight
+    
+    // re-render cards to update the selected highlight state
     renderStrategyCards(strategiesByStops, overallBestRef, currentStops, onSelectStops);
+    
+    // add a click animation effect
     if (card) { card.style.transform = 'scale(0.99)'; setTimeout(() => (card.style.transform = ''), 120); }
   }
 
-  
-
-  function showLoading(text){
-    const overlay = document.getElementById('loadingOverlay');
-    const label = document.getElementById('loadingText');
-    if (label && text) label.textContent = text;
-    if (overlay) overlay.classList.remove('hidden');
-  }
-  function hideLoading(){
-    const overlay = document.getElementById('loadingOverlay');
-    if (overlay) overlay.classList.add('hidden');
-  }
-
+  // fetch optimised strategies from the backend and display them
   async function fetchAndRenderStrategies(config) {
     setStrategyStatus('Optimising strategies…');
     showLoading('Optimising strategies…');
@@ -112,15 +125,21 @@ if (form) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      
       strategiesByStops = data.best || {};
       recommendedStops = data.overallBest?.stops ?? null;
       overallBestRef = data.overallBest || null;
       currentStops = recommendedStops;
+      
+      // render the summary cards
       renderStrategyCards(strategiesByStops, overallBestRef, currentStops, onSelectStops);
 
-  // default view
-  const strat = overallBestRef || strategiesByStops[currentStops] || strategiesByStops[3] || strategiesByStops[2] || strategiesByStops[1];
-  renderStrategyCharts(strat);
+      // determine which strategy to show on the chart by default
+      // priority, Overall Best, Current Selection, 3 Stopper, 2 Stopper, 1 Stopper
+      const strat = overallBestRef || strategiesByStops[currentStops] || strategiesByStops[3] || strategiesByStops[2] || strategiesByStops[1];
+      
+      renderStrategyCharts(strat);
+      
       if (!strat) setStrategyStatus('No valid strategies found for these inputs.');
     } catch (err) {
       console.error('Failed to fetch strategies', err);
@@ -131,24 +150,28 @@ if (form) {
   }
 
 
-  // submit handler
+  // main form submission handler, run simulation
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    
+    // run full validation
     const errors = validateAll();
     const hasErrors = Object.keys(errors).length > 0;
     const results = $("resultsOutput");
+    
     if (hasErrors) {
       alert('Cannot run simulation: The race configuration has invalid fields. Please correct them and try again.');
       if (results) results.textContent = "Please correct the highlighted fields.";
       return;
     }
-    // build raceConfig
+    
+    // construct the configuration object from form inputs
     const raceConfig = {
       totalLaps: $("totalLaps").value,
       trackLength: $("trackLength").value,
       fuelLoad: $("fuelLoad").value,
       degradation: $("degradation").value,
-  totalRainfall: $("totalRainfall").value,
+      totalRainfall: $("totalRainfall").value,
       temperature: $("temperature").value,
       baseLapTime: $("baseLapTime").value,
       pitStopLoss: $("pitStopLoss").value,
@@ -156,6 +179,8 @@ if (form) {
 
     try {
       showLoading('Saving and calculating…');
+      
+      // validate and normalise the config via the backend
       const res = await apiFetch("/api/race-config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -163,10 +188,14 @@ if (form) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      
+      // update global state
       window.raceConfig = data.saved || raceConfig;
       console.log("Saved raceConfig:", window.raceConfig);
+      
       if (results) results.textContent = "Calculating lap times…";
 
+      // run the basic simulation
       const calcRes = await apiFetch("/api/calculate-laps", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -177,7 +206,7 @@ if (form) {
       if (!calcData?.ok) throw new Error("Calculation failed");
       renderResults(calcData.laps || []);
 
-      // strategies
+      // generate optimised strategies
       await fetchAndRenderStrategies(window.raceConfig);
     } catch (err) {
       console.error("Failed to save raceConfig", err);
@@ -188,8 +217,7 @@ if (form) {
   });
 }
 
-// save and load UI logic is handled in modal.js
-
+// initialise the modal system once the DOM is ready
 document.addEventListener('DOMContentLoaded', () => {
   initConfigModalBindings();
 });

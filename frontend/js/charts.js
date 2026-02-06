@@ -1,5 +1,7 @@
+// allows charts to be updated instead of replacee
 let chartLap, chartFuel, chartTyre;
 
+// used to draw the vertical lines for pit stops
 function registerAnnotation() {
   try {
     if (window.ChartAnnotation) window.Chart.register(window.ChartAnnotation);
@@ -7,6 +9,7 @@ function registerAnnotation() {
   } catch (e) {}
 }
 
+// generic config options shared across all three charts
 function baseOptions(yTitle, chartTitle) {
   return {
     responsive: true,
@@ -31,6 +34,7 @@ function baseOptions(yTitle, chartTitle) {
   };
 }
 
+// creates the chart instances if not already created
 export function ensureCharts() {
   registerAnnotation();
   if (!chartLap) {
@@ -47,30 +51,38 @@ export function ensureCharts() {
   }
 }
 
+// updates visualisations with new data from a specific strategy
 export function renderStrategyCharts(strategy) {
   ensureCharts();
+  
   if (!strategy || !chartLap || !chartFuel || !chartTyre) return;
 
+  // unpack the time series data for the charts
   const series = strategy.lapSeries || [];
   const labels = series.map(p => p.lap);
   const lapTimes = series.map(p => p.time);
   const fuelLoads = series.map(p => p.fuelLoad);
   const tyreWear = series.map(p => p.tyrePenalty);
+  
+  // identify special laps for highlighting
   const pitSet = new Set((strategy.pitLaps || []).map(Number));
   const fastLapNum = strategy.fastestLap ? strategy.fastestLap.lapNumber : -1;
 
+  // dynamic styling functions for chart points
   const pointRadiusFunc = (ctx) => {
     const l = labels[ctx.dataIndex];
     if (l === fastLapNum) return 5;
     if (pitSet.has(l)) return 3;
     return 0;
   };
+  
   const pointColorFunc = (ctx) => {
     const l = labels[ctx.dataIndex];
-    if (l === fastLapNum) return '#d8b4fe';
-    return '#ff9a3c';
+    if (l === fastLapNum) return '#d8b4fe'; // purple for fastest lap
+    return '#ff9a3c'; // orange default
   };
 
+  // generates vertical line annotations for pit stops
   const buildAnnotations = () => {
     const anns = {};
     (strategy.pitLaps || []).forEach((lap, i) => {
@@ -88,6 +100,7 @@ export function renderStrategyCharts(strategy) {
     return anns;
   };
 
+  // update the lap time chart
   chartLap.data.labels = labels;
   chartLap.data.datasets = [{
     label: 'Lap Time (s)',
@@ -106,6 +119,7 @@ export function renderStrategyCharts(strategy) {
   }
   chartLap.update();
 
+  // update the fuel chart
   chartFuel.data.labels = labels;
   chartFuel.data.datasets = [{
     label: 'Fuel Load (kg)',
@@ -124,6 +138,7 @@ export function renderStrategyCharts(strategy) {
   }
   chartFuel.update();
 
+  // update the tyre degradation chart
   chartTyre.data.labels = labels;
   chartTyre.data.datasets = [{
     label: 'Tyre Wear (s penalty)',

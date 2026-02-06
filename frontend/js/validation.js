@@ -1,34 +1,45 @@
-// input validation helpers and field validators
-
+// parsing helper, converting messy inputs into usable integers
 export const integer = (v) => {
   const n = parseInt(String(v).trim(), 10);
   return Number.isFinite(n) ? n : NaN;
 };
 
+// parsing helper, converting messy inputs into usable floats
 export const decimal = (v) => {
   const n = parseFloat(String(v).trim());
   return Number.isFinite(n) ? n : NaN;
 };
 
+// ui helper, appends or updates a visual error message below a form field
 export const showError = (el, msg) => {
   el.classList.add('input-error');
+  
+  // check if an error message element already exists nearby
   let span = el.nextElementSibling;
+  
+  // if not, create one
   if (!(span && span.classList && span.classList.contains('error-text'))) {
     span = document.createElement('div');
     span.className = 'error-text';
     el.insertAdjacentElement('afterend', span);
   }
+  
+  // cleanup any accidental duplicates
   let dup = span.nextElementSibling;
-  while (dup && dup.classList && dup.classList.contains('error-text')) {
+  while (dup && dup && dup.classList && dup.classList.contains('error-text')) {
     const toRemove = dup;
     dup = dup.nextElementSibling;
     toRemove.remove();
   }
+  
   span.textContent = msg || '';
 };
 
+// ui helper, removes the error styling and message when input becomes valid
 export const clearError = (el) => {
   el.classList.remove('input-error');
+  
+  // remove all adjacent error message elements
   let span = el.nextElementSibling;
   while (span && span.classList && span.classList.contains('error-text')) {
     const toRemove = span;
@@ -37,6 +48,8 @@ export const clearError = (el) => {
   }
 };
 
+// defines the validation rules for every single form input
+// returns a map of field ids to validation functions
 export function getFieldValidators() {
   return {
     totalLaps: (el) => {
@@ -71,7 +84,7 @@ export function getFieldValidators() {
     },
     totalRainfall: (el) => {
       const raw = el.value.trim();
-      if (!raw) return '';
+      if (!raw) return ''; // optional field
       const n = decimal(raw);
       if (Number.isNaN(n)) return 'Total Rainfall must be a number';
       if (n < 0) return 'Total Rainfall cannot be negative';
@@ -105,22 +118,28 @@ export function getFieldValidators() {
   };
 }
 
+// triggers validation for a single field by its html id
 export function validateField(id) {
   const el = document.getElementById(id);
   const fields = getFieldValidators();
   if (!el || !fields[id]) return '';
+  
   const msg = fields[id](el);
   if (msg) showError(el, msg); else clearError(el);
   return msg;
 }
 
+// triggers validation for the entire form at once
+// returns an object containing any errors found
 export function validateAll() {
   const fields = getFieldValidators();
   const ids = Object.keys(fields);
   const errors = {};
+  
   ids.forEach((id) => {
     const msg = validateField(id);
     if (msg) errors[id] = msg;
   });
+  
   return errors;
 }

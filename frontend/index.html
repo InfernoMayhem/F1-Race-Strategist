@@ -1,26 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- basic document metadata and character set definition -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>F1 Strategy Simulator</title>
+  
+  <!-- main stylesheet import -->
   <link rel="stylesheet" href="css/styles.css?v=4" />
   <meta name="color-scheme" content="dark light" />
   <meta name="theme-color" content="#ff7a00" />
-  <!-- Chart.js for graphing (kept via CDN for now) -->
+  
+  <!-- external charting libraries loaded via cdn for visualization -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 </head>
 <body>
+  
+  <!-- simplistic header bar -->
   <header class="basic-header">
     <h1><span class="title-accent">F1</span> Race Strategist</h1>
   </header>
 
-  <!-- React root for incremental migration -->
+  <!-- incremental react root (future proofing) -->
   <div id="root"></div>
 
     <main class="basic-container">
-      <!-- Top Left: Race Setup -->
+      
+      <!-- left panel: inputs for race conditions and car configuration -->
       <section class="panel panel-setup">
         <h2 id="raceSetupTitle">Race Setup</h2>
         <form id="raceForm" class="form-grid" novalidate>
@@ -65,6 +72,7 @@
             <input type="text" id="totalRainfall" name="totalRainfall" placeholder="blank = 0 (dry)" />
           </div>
 
+          <!-- action buttons for the form -->
           <div class="field field-span-2" style="margin-top:4px; display:flex; gap:10px;">
             <button type="submit" class="btn-basic" style="flex:2;">Run Simulation</button>
             <button type="button" id="saveConfigBtn" class="btn-basic btn-alt" style="flex:1;">Save Config</button>
@@ -73,17 +81,16 @@
         </form>
       </section>
 
-      <!-- Top Right: Strategy comparison -->
+      <!-- right panel: displays the generated strategy options -->
       <section class="panel panel-strategy">
         <h2>Strategy Comparison</h2>
         <div id="strategyStatus" class="strategy-status">No strategies yet. Fill the form and run a simulation.</div>
         <div id="strategyCards" class="strategy-cards">
-          <!-- populated by app.js -->
+          <!-- strategy cards are injected here by js -->
         </div>
-  <!-- Lap time summary removed as per requirement: no raw lap times displayed -->
       </section>
 
-      <!-- Bottom: Charts spanning full width -->
+      <!-- bottom panel: comprehensive charts for data analysis -->
       <section class="panel panel-chart">
         <h2>Race Chart</h2>
         <div class="chart-key">
@@ -105,12 +112,13 @@
       
     </main>
 
-  <!-- Legacy app logic (form handling, charts, strategies) via ES modules -->
+  <!-- main application logic script -->
   <script type="module" src="js/app.js?v=6"></script>
-  <!-- React entrypoint (Vite) for incremental migration -->
+  
+  <!-- react entry point (if used) -->
   <script type="module" src="/src/main.jsx"></script>
 
-  <!-- Modal for saving/loading configs -->
+  <!-- global modal for configuration management -->
     <div id="configModal" class="modal hidden">
       <div class="modal-content">
         <div class="modal-header">
@@ -118,11 +126,12 @@
           <button class="modal-close" id="closeConfigModal" aria-label="Close">×</button>
         </div>
         <div class="modal-body" id="configModalBody">
-          <!-- dynamic content injected by app.js -->
+          <!-- dynamic content injected by modal.js -->
         </div>
       </div>
     </div>
-    <!-- Loading Overlay -->
+    
+    <!-- global loading spinner overlay -->
     <div id="loadingOverlay" class="loading-overlay hidden" aria-live="polite" aria-busy="true">
       <div class="loading-box">
         <div class="spinner" aria-hidden="true"></div>

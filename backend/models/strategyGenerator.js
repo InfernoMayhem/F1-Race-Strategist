@@ -166,9 +166,9 @@ function validateStintsWithCompounds(stints, compounds) {
 
 // simulate a full race for a specific set of pit stops and tyre choices
 function evaluateStrictStrategy(params, pitLaps, compounds) {
-  const totalLaps = toNumber(params.totalLaps, 0);
-  const pitStopLoss = toNumber(params.pitStopLoss, 0);
-  const outLapPenalty = toNumber(params.outLapPenalty, 0);
+  const totalLaps = Number(params.totalLaps);
+  const pitStopLoss = Number(params.pitStopLoss);
+  const outLapPenalty = Number(params.outLapPenalty);
   
   // basic validation
   if (!Number.isFinite(totalLaps) || totalLaps <= 0) return null;
@@ -187,7 +187,7 @@ function evaluateStrictStrategy(params, pitLaps, compounds) {
   let currentStintLap = 0;
   
   // fuel calculations
-  const initialFuel = toNumber(params.initialFuel, 0);
+  const initialFuel = Number(params.initialFuel);
   const fuelBurnPerLap = totalLaps > 0 ? initialFuel / totalLaps : 0;
 
   // simulate lap by lap
@@ -236,20 +236,17 @@ function evaluateStrictStrategy(params, pitLaps, compounds) {
   };
 }
 
-function toNumber(value, def) {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : def;
-}
+
 
 // enrich a raw strategy result with detailed lap-by-lap statistics for the UI
 function buildStrictStrategy(strictResult, config) {
   if (!strictResult) return null;
-  const totalLaps = toInt(config.totalLaps, 0);
-  const baseLapTime = toNumber(config.baseLapTime, 0);
-  const fuelLoadKg = toNumber(config.fuelLoad, 0);
+  const totalLaps = parseInt(config.totalLaps, 10);
+  const baseLapTime = Number(config.baseLapTime);
+  const fuelLoadKg = Number(config.fuelLoad);
   const fuelBurnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
   const trackDegFactor = getTrackDegFactor(config);
-  const outLapPenalty = toNumber(config.outLapPenalty, 0);
+  const outLapPenalty = Number(config.outLapPenalty);
 
   const lapSeries = [];
   const stints = [];
@@ -618,7 +615,7 @@ function generateStrictStrategies(config) {
   return { best: bestByStops, overallBest, meta: { algorithm: 'strict-exhaustive', variants: Object.keys(bestByStops).length } };
 }
 
-function toInt(v, fb) { const n = parseInt(v, 10); return Number.isFinite(n) ? n : fb; }
+
 
 function generateStrategies(config, options = {}) {
     return generateStrictStrategies(config);

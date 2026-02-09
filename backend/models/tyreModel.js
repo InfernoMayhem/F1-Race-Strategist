@@ -18,19 +18,13 @@ const WEAR_PARAMS = {
   Wet: { linear: 0.03, wearStart: 12, beta: 0.05, gamma: 0.14, cliffStart: 28, cliffBeta: 0.10, cliffGamma: 0.18 },
 };
 
-// helper function to safely convert a value to a number or return a fallback default
-function toNumber(value, fallback) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-}
-
 // calculate a multiplier for tyre wear based on track degradation setting and temperature
 function getTrackDegFactor(config) {
   // normalise the degradation level string
   const degLevel = (config.degradation || "Medium").toString().toLowerCase();
   
   // get the temperature, defaulting to 25 degrees if missing
-  const temperature = toNumber(config.temperature, 25);
+  const temperature = config.temperature !== undefined ? Number(config.temperature) : 25;
   
   // set the initial factor based on the degradation category
   let factor = 1.0;

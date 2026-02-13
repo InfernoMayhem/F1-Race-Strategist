@@ -4,36 +4,36 @@ const path = require("path");
 const fs = require("fs");
 const http = require("http");
 
-// initialise the express application
+// Initialize the Express application
 const app = express();
 
-// enable cors so the frontend can talk to the backend on a different port
+// Enable Cross-Origin Resource Sharing (CORS) to allow requests from the frontend during development
 app.use(cors());
 
-// enable parsing of json request bodies
+// Middleware to parse incoming JSON payloads
 app.use(express.json());
 
-// global request logger middleware
-// prints the timestamp, method, and url of every incoming request
+// Request logging middleware for debugging purposes
 app.use((req, res, next) => {
 	try {
+        // Log the timestamp, HTTP method, and URL of the incoming request
 		console.log(new Date().toISOString(), req.method, req.originalUrl);
-	} catch (e) {
-		// handle logging errors silently to avoid crashing the request
+	} catch (error) {
+		// Silently handle logging errors to prevent crashing the server
 	}
 	next();
 });
 
-// detect if we should serve the built frontend static files directly
+// Configure static file serving for the production build of the frontend
 const distDir = path.join(__dirname, "..", "frontend", "dist");
 const serveFrontendFromBackend = process.env.SERVE_FRONTEND === '1' && fs.existsSync(distDir);
 
-// verify backend is working
+// Simple health check endpoint to verify the backend is reachable
 app.get("/api/hello", (_req, res) => {
 	res.json({ message: "Backend is working!" });
 });
 
-// logic modules
+// Import the core logic modules for the application
 const { calculateLapTimes } = require("./models/calculateLapTimes");
 const { generateStrategies } = require("./models/strategyGenerator");
 const { 
@@ -43,13 +43,12 @@ const {
 	deleteConfig: dbDeleteConfig 
 } = require("./models/configStore");
 
-// endpoint to validate and normalize a race configuration
-// basically used to just confirm the data format before doing heavy calculations
+// Endpoint to validate and normalize race configuration data
 app.post("/api/race-config", (req, res) => {
-	const cfg = req.body || {};
+	const configData = req.body || {};
 	
-	// list of fields that must be present
-	const required = [
+	// Define the list of mandatory fields required for a valid configuration
+	const requiredFields = [
 		"totalLaps",
 		"trackLength",
 		"fuelLoad",
@@ -59,44 +58,59 @@ app.post("/api/race-config", (req, res) => {
 		"pitStopLoss",
 	];
 	
-	// check for missing fields
-	const missing = required.filter((k) => !(k in cfg));
+	// Identify any missing fields in the request body
+	const missingFields = requiredFields.filter((key) => !(key in configData));
 	
-	// normalise weather/rainfall if needed
-	if (!('totalRainfall' in cfg) && 'weather' in cfg) {
-		if (cfg.weather === 'Wet') cfg.totalRainfall = 50;
-		else cfg.totalRainfall = 0;
+	// Normalize weather-related fields if necessary
+	if (!('totalRainfall' in configData) && 'weather' in configData) {
+		if (configData.weather === 'Wet') {
+            configData.totalRainfall = 50;
+        } else {
+            configData.totalRainfall = 0;
+        }
 	}
 	
-	// reject request if data is incomplete
-	if (missing.length) {
-		return res.status(400).json({ error: "Missing fields", missing });
+	// Return a 400 Bad Request error if any required fields are missing
+	if (missingFields.length) {
+		return res.status(400).json({ error: "Missing fields", missing: missingFields });
 	}
-	res.status(201).json({ ok: true, saved: cfg });
+    
+    // Return success response with the validated configuration
+	res.status(201).json({ ok: true, saved: configData });
 });
 
-// endpoint to perform the basic lap time calculation (no pit stops)
+// Endpoint to calculate basic lap times without pit stops (baseline)
 app.post("/api/calculate-laps", (req, res) => {
-	const cfg = req.body;
-	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
+	const configData = req.body;
+    
+	if (!configData || Object.keys(configData).length === 0) {
+        return res.status(400).json({ error: "No race config available" });
+    }
+
 	try {
-		const laps = calculateLapTimes(cfg, req.query || {});
-		return res.json({ ok: true, laps });
-	} catch (err) {
-		console.error("calculate-laps error", err);
+		const lapTimes = calculateLapTimes(configData, req.query || {});
+		return res.json({ ok: true, laps: lapTimes });
+	} catch (error) {
+		console.error("Error in calculate-laps:", error);
 		return res.status(500).json({ error: "Failed to calculate laps" });
 	}
 });
 
-// endpoint to generate optimal race strategies (pit stop planning)
+// Endpoint to generate optimal race strategies involving pit stops
 app.post("/api/generate-strategies", (req, res) => {
-	const cfg = req.body;
-	if (!cfg || Object.keys(cfg).length === 0) return res.status(400).json({ error: "No race config available" });
+	const configData = req.body;
+    
+	if (!configData || Object.keys(configData).length === 0) {
+        return res.status(400).json({ error: "No race config available" });
+    }
+    
 	try {
-		const { best, overallBest } = generateStrategies(cfg, {});
+		const strategyResults = generateStrategies(configData, {});
+        // Destructure only the best strategies to send back to the client
+		const { best, overallBest } = strategyResults;
 		return res.json({ ok: true, best, overallBest });
-	} catch (err) {
-		console.error("generate-strategies error", err);
+	} catch (error) {
+		console.error("Error in generate-strategies:", error);
 		return res.status(500).json({ error: "Failed to generate strategies" });
 	}
 });

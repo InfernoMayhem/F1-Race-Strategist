@@ -35,13 +35,13 @@ function calculateLapTime(lapNumber, stintLap, compound, params, currentFuelKg) 
   const { time, invalid } = calcLapTimeWithWear({
     compound: info.key,
     age: stintLap,
-    baseLapTime: toNumber(params.baseLapTime, 0),
+    baseLapTime: Number(params.baseLapTime) || 0,
     baseOffset: info.baseOffset,
-    totalLaps: toNumber(params.totalLaps, 0),
+    totalLaps: Number(params.totalLaps) || 0,
     lapGlobal: lapNumber,
     fuelLoadKg: currentFuelKg,
     fuelPerKgBenefit: fuelPerKgBenefit,
-    trackDegFactor: toNumber(params.trackDegFactor, 1.0),
+    trackDegFactor: Number(params.trackDegFactor) || 1.0,
     maxStintLap: info.maxUsefulLaps + 10,
     rejectThresholdSec: 999, // invalid laps higher up
   });
@@ -97,125 +97,168 @@ function generatePitCombos(totalLaps, stopCount) {
   return results;
 }
 
-// convert a list of pit stop laps into stint ranges (start lap, end lap)
-function stintsFromPits(totalLaps, pitLaps) {
-  const stints = [];
-  let start = 1;
-  for (let i = 0; i < pitLaps.length; i++) {
-    const pit = pitLaps[i];
-    stints.push({ from: start, to: pit });
-    start = pit + 1;
+// Takes a list of lap numbers where pit stops happen, and converts them
+// into "stints" (ranges of laps) that the car drives between stops.
+function stintsFromPits(totalRaceLaps, pitStopLapNumbers) {
+  const stintRanges = [];
+  let currentStartLap = 1;
+
+  for (let i = 0; i < pitStopLapNumbers.length; i++) {
+    const pitLap = pitStopLapNumbers[i];
+    
+    // Create a stint from the last start point to this pit stop
+    stintRanges.push({ 
+        from: currentStartLap, 
+        to: pitLap 
+    });
+    
+    // The next stint starts on the lap immediately following the pit stop
+    currentStartLap = pitLap + 1;
   }
-  // add the final stint to the finish line
-  stints.push({ from: start, to: totalLaps });
-  return stints;
+  
+  // Don't forget the final stint that goes all the way to the checkered flag
+  stintRanges.push({ 
+      from: currentStartLap, 
+      to: totalRaceLaps 
+  });
+  
+  return stintRanges;
 }
 
-// generate all permutations of tyre compounds for the given number of stints
-function generateTyreAssignments(stintCount, allowedCompounds) {
-  const keys = allowedCompounds || Object.keys(BASE_COMPOUNDS);
-  const out = [];
+// Generates every possible combination of tyre compounds we could assign to these stints.
+function generateTyreAssignments(numberOfStints, allowedCompoundsList) {
+  // If no specific compounds allowed, assume we can use any of the base ones
+  const availableCompounds = allowedCompoundsList || Object.keys(BASE_COMPOUNDS);
+  const validAssignments = [];
   
-  // recursive backtracking function to build assignments
-  function backtrack(idx, acc) {
-    // base case, we have assigned a compound to every stint
-    if (idx === stintCount) {
-      // rule check, must use at least 2 different compounds
-      const uniqueCompounds = new Set(acc);
-      if (uniqueCompounds.size >= 2) {
-        out.push(acc.slice());
+  // Use a recursive helper function to build the tree of possibilities
+  function buildAssignmentRecursive(currentStintIndex, currentAssignmentList) {
+    // Base case: we have assigned a tyre to every single stint
+    if (currentStintIndex === numberOfStints) {
+      
+      // We must check the regulations: drivers must use at least 2 different compounds in a race
+      const uniqueCompoundsUsed = new Set(currentAssignmentList);
+      if (uniqueCompoundsUsed.size >= 2) {
+        // This is a valid strategy, save a copy of it
+        validAssignments.push(currentAssignmentList.slice());
       }
       return;
     }
     
-    // try adding each available compound
-    for (let k = 0; k < keys.length; k++) {
-      acc.push(keys[k]);
-      backtrack(idx + 1, acc);
-      acc.pop(); // backtrack
+    // Loop through every available tyre type and try adding it to the current stint
+    for (let compoundIndex = 0; compoundIndex < availableCompounds.length; compoundIndex++) {
+      const compoundName = availableCompounds[compoundIndex];
+      
+      currentAssignmentList.push(compoundName);
+      
+      // Move on to the next stint
+      buildAssignmentRecursive(currentStintIndex + 1, currentAssignmentList);
+      
+      // Backtrack: remove the last added tyre so we can try the next one
+      currentAssignmentList.pop();
     }
   }
-  backtrack(0, []);
-  return out;
-}
 
-// check if a stint length is within the useful life of the assigned tyre
-function validateStintLength(stintLength, compound) {
-  const info = getTyreInfo(compound);
-  if (!info) return false;
-  return stintLength <= info.maxUsefulLaps;
-}
-
-// validate an entire strategy plan against physical constraints
-function validateStintsWithCompounds(stints, compounds) {
-  if (stints.length !== compounds.length) return false;
+  // Start the recursion from the first stint (index 0) with an empty list
+  buildAssignmentRecursive(0, []);
   
-  for (let i = 0; i < stints.length; i++) {
-    const len = stints[i].to - stints[i].from + 1;
-    
-    // check minimum stint length
-    if (len < MIN_STINT) return false;
-    
-    // check maximum tyre life
-    const info = getTyreInfo(compounds[i]);
-    if (!info) return false;
-    if (!validateStintLength(len, compounds[i])) return false;
+  return validAssignments;
+}
+
+// Check if a specific stint length is realistic for a given tyre compound
+function validateStintLength(stintLengthLaps, compoundName) {
+  const tyreInfo = getTyreInfo(compoundName);
+  
+  // If the tyre doesn't exist, it's definitely not valid
+  if (!tyreInfo) {
+      return false;
   }
+  
+  // Return true only if the stint is shorter than the tyre's maximum life
+  return stintLengthLaps <= tyreInfo.maxUsefulLaps;
+}
+
+// Validate the entire strategy to ensure every stint is physically possible
+function validateStintsWithCompounds(stintRanges, compoundAssignments) {
+  if (stintRanges.length !== compoundAssignments.length) {
+      return false;
+  }
+  
+  for (let i = 0; i < stintRanges.length; i++) {
+    const stintDuration = stintRanges[i].to - stintRanges[i].from + 1;
+    
+    // Check global minimum stint length (e.g. can't do a 0 lap stint)
+    if (stintDuration < MIN_STINT) {
+        return false;
+    }
+    
+    // Check if the assigned compound can actually last this long
+    const assignedCompound = compoundAssignments[i];
+    if (!validateStintLength(stintDuration, assignedCompound)) {
+        return false;
+    }
+  }
+  
+  // If we made it here, the strategy is valid
   return true;
 }
 
-// simulate a full race for a specific set of pit stops and tyre choices
-function evaluateStrictStrategy(params, pitLaps, compounds) {
-  const totalLaps = Number(params.totalLaps);
-  const pitStopLoss = Number(params.pitStopLoss);
-  const outLapPenalty = Number(params.outLapPenalty);
+// Run a full simulation of the race for a specific strategy (pit laps + compounds)
+function evaluateStrictStrategy(raceParams, pitStops, compoundChoices) {
+  // Parse inputs with defaults to avoid NaN
+  const totalLaps = Number(raceParams.totalLaps) || 0;
+  const timeLostInPit = Number(raceParams.pitStopLoss) || 0;
+  const timeLostOutLap = Number(raceParams.outLapPenalty) || 0;
+  const trackDegFactor = getTrackDegFactor(raceParams);
   
-  // basic validation
-  if (!Number.isFinite(totalLaps) || totalLaps <= 0) return null;
-  if (!Array.isArray(pitLaps)) return null;
+  // Basic sanity checks
+  if (!totalLaps || totalLaps <= 0) return null;
+  if (!Array.isArray(pitStops)) return null;
 
-  // convert pits to stint ranges
-  const stintRanges = stintsFromPits(totalLaps, pitLaps);
+  // Convert the pit stop laps into actual driving stints
+  const stintRanges = stintsFromPits(totalLaps, pitStops);
   
-  // ensure the plan is physically possible
-  if (!validateStintsWithCompounds(stintRanges, compounds)) return null;
+  // Ensure the physics allow this strategy
+  if (!validateStintsWithCompounds(stintRanges, compoundChoices)) {
+      return null;
+  }
 
-  const lapTimes = [];
-  let totalTime = 0;
-  let stintIndex = 0;
-  let currentStint = stintRanges[0];
-  let currentStintLap = 0;
+  const raceLapTimes = [];
+  let totalRaceTime = 0;
+  let currentStintIndex = 0;
+  let currentStintObject = stintRanges[0];
+  let lapsDrivenInStint = 0;
   
-  // fuel calculations
-  const initialFuel = Number(params.initialFuel);
-  const fuelBurnPerLap = totalLaps > 0 ? initialFuel / totalLaps : 0;
+  // Calculate fuel burn
+  const startFuel = Number(raceParams.initialFuel) || 0;
+  const fuelBurnPerLap = totalLaps > 0 ? startFuel / totalLaps : 0;
 
-  // simulate lap by lap
-  for (let lap = 1; lap <= totalLaps; lap++) {
-    // track laps within the current stint
-    if (lap === currentStint.from) {
-      currentStintLap = 1; 
+  // Iterate through every lap of the race
+  for (let currentLap = 1; currentLap <= totalLaps; currentLap++) {
+    // Check if we are still in the same stint or if we crossed a boundary
+    if (currentLap === currentStintObject.from) {
+      lapsDrivenInStint = 1; 
     } else {
-      currentStintLap += 1;
+      lapsDrivenInStint += 1;
     }
     
-    const compKey = compounds[stintIndex];
-    const currentFuelKg = Math.max(0, initialFuel - fuelBurnPerLap * (lap - 1));
+    const compKey = compoundChoices[currentStintIndex];
+    const currentFuelKg = Math.max(0, startFuel - fuelBurnPerLap * (currentLap - 1));
     
     // calculate time for this specific lap
-    const t = calculateLapTime(lap, currentStintLap, compKey, { ...params, outLapPenalty }, currentFuelKg);
+    const t = calculateLapTime(currentLap, lapsDrivenInStint, compKey, { ...raceParams, outLapPenalty: timeLostOutLap, trackDegFactor }, currentFuelKg);
     
-    lapTimes.push(t);
-    totalTime += t;
+    raceLapTimes.push(t);
+    totalRaceTime += t;
     
     // handle pit stop at the end of the stint
-    if (lap === currentStint.to) {
-      if (stintIndex < stintRanges.length - 1) {
-        totalTime += pitStopLoss;
+    if (currentLap === currentStintObject.to) {
+      if (currentStintIndex < stintRanges.length - 1) {
+        totalRaceTime += timeLostInPit;
       }
-      stintIndex += 1;
-      currentStint = stintRanges[stintIndex] || currentStint;
-      currentStintLap = 0;
+      currentStintIndex += 1;
+      currentStintObject = stintRanges[currentStintIndex] || currentStintObject;
+      lapsDrivenInStint = 0;
     }
   }
 
@@ -223,15 +266,15 @@ function evaluateStrictStrategy(params, pitLaps, compounds) {
   const stintsOut = stintRanges.map((r, i) => ({
     from: r.from,
     to: r.to,
-    compound: compounds[i],
+    compound: compoundChoices[i],
     laps: r.to - r.from + 1,
-    lapTime: lapTimes.slice(r.from - 1, r.to).reduce((a, b) => a + b, 0) / (r.to - r.from + 1) || 0,
+    lapTime: raceLapTimes.slice(r.from - 1, r.to).reduce((a, b) => a + b, 0) / (r.to - r.from + 1) || 0,
   }));
 
   return {
     valid: true,
-    totalTime,
-    lapTimes,
+    totalTime: totalRaceTime,
+    lapTimes: raceLapTimes,
     stints: stintsOut,
   };
 }
@@ -241,12 +284,12 @@ function evaluateStrictStrategy(params, pitLaps, compounds) {
 // enrich a raw strategy result with detailed lap-by-lap statistics for the UI
 function buildStrictStrategy(strictResult, config) {
   if (!strictResult) return null;
-  const totalLaps = parseInt(config.totalLaps, 10);
-  const baseLapTime = Number(config.baseLapTime);
-  const fuelLoadKg = Number(config.fuelLoad);
+  const totalLaps = parseInt(config.totalLaps, 10) || 0;
+  const baseLapTime = Number(config.baseLapTime) || 0;
+  const fuelLoadKg = Number(config.fuelLoad) || 0;
   const fuelBurnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
   const trackDegFactor = getTrackDegFactor(config);
-  const outLapPenalty = Number(config.outLapPenalty);
+  const outLapPenalty = Number(config.outLapPenalty) || 0;
 
   const lapSeries = [];
   const stints = [];
@@ -357,13 +400,13 @@ function buildStrictStrategy(strictResult, config) {
 
 // use dynamic programming to find the optimal pit strategy for a fixed number of stops
 function optimiseForStopCount(params, stopCount, allowedCompounds) {
-  const totalLaps = toNumber(params.totalLaps, 0);
+  const totalLaps = parseInt(params.totalLaps, 10);
   if (!Number.isFinite(totalLaps) || totalLaps < 1) throw new Error('totalLaps must be > 0');
   
   const numStints = stopCount + 1;
-  const initialFuel = toNumber(params.initialFuel, 0);
+  const initialFuel = Number(params.initialFuel);
   const fuelBurnPerLap = totalLaps > 0 ? initialFuel / totalLaps : 0;
-  const pitStopLoss = toNumber(params.pitStopLoss, 0);  
+  const pitStopLoss = Number(params.pitStopLoss);  
 
   // cache to store the calculated time for any [startLap, length, compound] combination
   const stintCostCache = new Map();
@@ -559,8 +602,8 @@ function optimiseForStopCount(params, stopCount, allowedCompounds) {
 
 // main entry point, calculate best strategies for 1, 2, and 3 stops
 function generateStrictStrategies(config) {
-  const totalLaps = toNumber(config.totalLaps, 0);
-  const totalRain = toNumber(config.totalRainfall, 0) || 0;
+  const totalLaps = parseInt(config.totalLaps, 10);
+  const totalRain = Number(config.totalRainfall) || 0;
   const avgRainPerLap = totalRain / Math.max(1, totalLaps);
 
   // automatically restrict compounds based on weather/rainfall
@@ -572,12 +615,12 @@ function generateStrictStrategies(config) {
 
   const params = {
     totalLaps: totalLaps,
-    baseLapTime: toNumber(config.baseLapTime, 0),
-    pitStopLoss: toNumber(config.pitStopLoss, 0),
-    initialFuel: toNumber(config.fuelLoad, 0),
+    baseLapTime: Number(config.baseLapTime) || 0,
+    pitStopLoss: Number(config.pitStopLoss) || 0,
+    initialFuel: Number(config.fuelLoad) || 0,
     fuelPerKgBenefit,
     trackDegFactor: getTrackDegFactor(config),
-    outLapPenalty: toNumber(config.outLapPenalty, 0),
+    outLapPenalty: Number(config.outLapPenalty) || 0,
   };
   
   const bestByStops = {};

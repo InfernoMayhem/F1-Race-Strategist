@@ -1,58 +1,83 @@
-// calculates an array of simple lap times for a full race without pit stops
-// primarily used for a basic no-pit baseline visualization
+// this file calculates the lap times if the driver never pits, acting as a baseline for actual strategies to be compared to
 
-// main calculation function, generates lap times based on fuel burn and basic tyre wear
-function calculateLapTimes(config, params = {}) {
-  // extract and sanitise configuration inputs
-  const totalLaps = parseInt(config.totalLaps, 10);
-  const baseLapTime = Number(config.baseLapTime);
-  const fuelLoadKg = Number(config.fuelLoad);
+function calculateLapTimes(raceConfiguration, modelParameters = {}) {
+  // converts the frontends config strings back into numbers which can be used for the calculations
+  const numberOfLaps = parseInt(raceConfiguration.totalLaps, 10);
+  const baseLapTimeSeconds = Number(raceConfiguration.baseLapTime);
+  const initialFuelLoadKg = Number(raceConfiguration.fuelLoad);
 
-  // validation checks
-  if (!Number.isFinite(totalLaps) || totalLaps <= 0) return [];
-  if (!Number.isFinite(baseLapTime) || baseLapTime <= 0) return Array(totalLaps).fill(0);
-
-  // parameters deciding how tyre performance degrades over time
-  // wearBaseSec, initial time loss per lap due to wear
-  const wearBaseSec = Number(params.tyreWearBaseSec ?? 0.05);
-  
-  // wearGrowth, how much the wear accelerates lap-over-lap
-  const wearGrowth = Number(params.tyreWearGrowth ?? 0.03);
-  
-  // fuelPerKgBenefit, how much time is gained per kg of fuel burned
-  const fuelPerKgBenefit = Number(
-    params.fuelPerKgBenefit ?? params.fuelPerKgPenalty ?? 0.005
-  ); 
-
-  // assume fuel is burned linearly across the total distance
-  const burnPerLapKg = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
-
-  const laps = [];
-  
-  // simulate each lap sequentially
-  for (let i = 1; i <= totalLaps; i++) {
-    
-    // calculate tyre wear penalty relative to fresh tyres
-    let tyrePenalty = 0;
-    if (wearGrowth === 0) {
-      tyrePenalty = wearBaseSec * i;
-    } else {
-      // compounding growth for tyre degradation
-      tyrePenalty = wearBaseSec * ((1 + wearGrowth) ** i - 1) / wearGrowth;
+  // If the data is invalid, return empty or zeroed arrays
+  if (isNaN(numberOfLaps) || numberOfLaps <= 0) {
+    return [];
+  }
+  if (isNaN(baseLapTimeSeconds) || baseLapTimeSeconds <= 0) {
+    // Return an array of zeros if we can't calculate real times
+    const zeroedLaps = [];
+    for (let i = 0; i < numberOfLaps; i++) {
+        zeroedLaps.push(0);
     }
-
-    // calculate fuel effect, car gets faster as it gets lighter
-    const fuelBurnedKg = burnPerLapKg * (i - 1);
-    const fuelBenefit = fuelPerKgBenefit * fuelBurnedKg;
-
-    // combine base time with penalties and benefits
-    const lapTime = baseLapTime + tyrePenalty - fuelBenefit;
-    
-    // store the result, rounded to 3 decimal places
-    laps.push(Number(lapTime.toFixed(3)));
+    return zeroedLaps;
   }
 
-  return laps;
+  // Extract tyre wear parameters, or use defaults if they aren't provided
+  let degradationBase = 0.05;
+  if (modelParameters.tyreWearBaseSec !== undefined) {
+      degradationBase = Number(modelParameters.tyreWearBaseSec);
+  }
+
+  let degradationGrowthFactor = 0.03;
+  if (modelParameters.tyreWearGrowth !== undefined) {
+      degradationGrowthFactor = Number(modelParameters.tyreWearGrowth);
+  }
+  
+  // Calculate the time benefit per kg of fuel burned
+  let timeGainPerKgOfFuel = 0.005;
+  if (modelParameters.fuelPerKgBenefit !== undefined) {
+      timeGainPerKgOfFuel = Number(modelParameters.fuelPerKgBenefit);
+  } else if (modelParameters.fuelPerKgPenalty !== undefined) {
+      timeGainPerKgOfFuel = Number(modelParameters.fuelPerKgPenalty);
+  }
+
+  // Calculate how much fuel we use per lap
+  let fuelBurnPerLapInKg = 0;
+  if (numberOfLaps > 0) {
+      fuelBurnPerLapInKg = initialFuelLoadKg / numberOfLaps;
+  }
+
+  const calculatedLapTimes = [];
+  
+  // Iterate through every lap of the race
+  for (let currentLapNumber = 1; currentLapNumber <= numberOfLaps; currentLapNumber++) {
+    
+    // 1. Calculate the time lost due to old tyres
+    let timeLostToTyreWear = 0;
+    
+    if (degradationGrowthFactor === 0) {
+        // If there is no compounding growth, it's just linear
+        timeLostToTyreWear = degradationBase * currentLapNumber;
+    } else {
+        // Otherwise, use the standard geometric series sum formula
+        // to find the cumulative wear effect for this specific lap
+        const growthMultiplier = 1 + degradationGrowthFactor;
+        const exponentialFactor = Math.pow(growthMultiplier, currentLapNumber);
+        timeLostToTyreWear = degradationBase * (exponentialFactor - 1) / degradationGrowthFactor;
+    }
+
+    // 2. Calculate the time gained due to lower fuel weight
+    // Note: On lap 1, we have burned 0 fuel at the start line (roughly)
+    const lapsCompletedPreviously = currentLapNumber - 1;
+    const totalFuelBurnedSoFar = fuelBurnPerLapInKg * lapsCompletedPreviously;
+    const timeGainedFromFuel = timeGainPerKgOfFuel * totalFuelBurnedSoFar;
+
+    // 3. Combine everything
+    const finalLapTime = baseLapTimeSeconds + timeLostToTyreWear - timeGainedFromFuel;
+    
+    // Round to 3 decimal places for cleaner output
+    const fixedString = finalLapTime.toFixed(3);
+    calculatedLapTimes.push(Number(fixedString));
+  }
+
+  return calculatedLapTimes;
 }
 
 module.exports = { calculateLapTimes };

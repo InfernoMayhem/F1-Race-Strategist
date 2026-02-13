@@ -1,6 +1,6 @@
-"use strict";
+// this file handles the physics and behaviour of the tyre compounds so they can formulate more accurate strategies
 
-// define base offset values for each tyre compound
+// base offset values for each tyre compound - the speed difference between the different tyre compounds when they are fresh
 const BASE_COMPOUNDS = {
   Soft:   { baseOffset: -0.75 },
   Medium: { baseOffset:  0.0 },
@@ -9,7 +9,7 @@ const BASE_COMPOUNDS = {
   Wet: { baseOffset: 5.0 },
 };
 
-// define wear parameters for each compound to control how they degrade over laps
+// wear parameters for each compound to control how they degrade over laps
 const WEAR_PARAMS = {
   Soft:   { linear: 0.08, wearStart: 6,  beta: 0.10, gamma: 0.20, cliffStart: 16, cliffBeta: 0.20, cliffGamma: 0.25 },
   Medium: { linear: 0.05, wearStart: 10, beta: 0.08, gamma: 0.18, cliffStart: 24, cliffBeta: 0.14, cliffGamma: 0.22 },
@@ -18,74 +18,74 @@ const WEAR_PARAMS = {
   Wet: { linear: 0.03, wearStart: 12, beta: 0.05, gamma: 0.14, cliffStart: 28, cliffBeta: 0.10, cliffGamma: 0.18 },
 };
 
-// calculate a multiplier for tyre wear based on track degradation setting and temperature
-function getTrackDegFactor(config) {
-  // normalise the degradation level string
-  const degLevel = (config.degradation || "Medium").toString().toLowerCase();
+// calculate a multiplier from the eninvironment based on track conditions and temperature
+function getEnvDegFactor(config) {
+  // standardise the degradation variable so it always is accepted
+  let degLevel = (config.degradation).toLowerCase();
   
-  // get the temperature, defaulting to 25 degrees if missing
-  const temperature = config.temperature !== undefined ? Number(config.temperature) : 25;
+  // get the temperature
+  let temperature = config.temperature
   
   // set the initial factor based on the degradation category
   let factor = 1.0;
-  if (degLevel === 'high') {
+  if (degLevel === 'high') { // if the degradation level is high then increase the tyre wear by a factor of 1.5
     factor = 1.5;
-  } else if (degLevel === 'low') {
+  } else if (degLevel === 'low') { // the same but for low deg, instead reducing it to 0.7
     factor = 0.7;
   } else {
-    factor = 1.0; // medium
+    factor = 1.0; // default value of 1 for medium deg
   }
 
-  // increase the degradation factor if the temperature is high
+  // if the temperature exceeds 30 degrees, then a bonus multipler is added to the tyre wear calculations
   if (temperature >= 30) {
     factor *= 1.1;
   }
-  if (temperature >= 35) {
+  if (temperature >= 35) { // larger multiplier for higher temps
     factor *= 1.15;
   }
-  if (temperature >= 40) {
+  if (temperature >= 40) { // largest multiplier for the highest temps
     factor *= 1.2;
   }
 
-  // ensure the factor stays within reasonable bounds (between 0.5 and 2.5)
+  // ensure the factor stays within reasonable bounds as a sanity check (between 0.5 and 2.5)
   return Math.max(0.5, Math.min(2.5, factor));
 }
 
 // calculate the time penalty added to a lap time due to tyre wear
-function tyreWearPenalty(compound, stintLapAge, trackDegFactor = 1.0, maxStintLap = 35) {
-  // get the specific wear parameters for this compound, defaulting to medium if not found
-  const params = WEAR_PARAMS[compound] || WEAR_PARAMS.Medium;
+function tyreWearPenalty(compound, stintLapAge, trackDegFactor, maxStintLap) {
+  // get the specific wear parameters for this compound
+  const params = WEAR_PARAMS[compound]
   const age = Math.max(1, stintLapAge);
   
   // linear calculation
-  let penalty = params.linear * age; 
+  let totalWearPenalty = params.linear * age; 
   
   // exponential calculation
   if (age > params.wearStart) {
-    penalty += params.beta * (Math.exp(params.gamma * (age - params.wearStart)) - 1);
+    totalWearPenalty += params.beta * (Math.exp(params.gamma * (age - params.wearStart)) - 1);
   }
 
   // cliff calculation
   if (age > params.cliffStart) {
-    penalty += params.cliffBeta * (Math.exp(params.cliffGamma * (age - params.cliffStart)) - 1);
+    totalWearPenalty += params.cliffBeta * (Math.exp(params.cliffGamma * (age - params.cliffStart)) - 1);
   }
 
   // overlimit calculation
   if (age > maxStintLap) {
-    penalty += Math.pow(1.25, age - maxStintLap) * 5;
+    totalWearPenalty += Math.pow(1.25, age - maxStintLap) * 5;
   }
 
   // apply the track degradation multiplier to the total penalty
-  return penalty * trackDegFactor;
+  return totalWearPenalty * trackDegFactor;
 }
 
 // calculate how much faster the car is due to burning off fuel weight
-function fuelAdvantageSecondsLinear(fuelBurnedKg, fuelPerKgBenefit) {
+function fuelAdvantage(fuelBurnedKg, fuelPerKgBenefit) {
   // ensure negative fuel isn't calculated
   return fuelPerKgBenefit * Math.max(0, fuelBurnedKg);
 }
 
-// calculate the final estimated lap time considering all factors (base time, tyre wear, fuel load)
+// calculate the final estimated lap time considering all factors incl. base lap time, tyre wear, fuel load
 function calcLapTimeWithWear({
   compound,
   age,
@@ -94,11 +94,11 @@ function calcLapTimeWithWear({
   totalLaps,
   lapGlobal,
   fuelLoadKg,
-  fuelPerKgBenefit = 0.005,
-  trackDegFactor = 1.0,
-  maxStintLap = 35,
-  rejectThresholdSec = 8,
-  outLapPenalty = 0,
+  fuelPerKgBenefit,
+  trackDegFactor,
+  maxStintLap,
+  rejectThresholdSec,
+  outLapPenalty,
 }) {
   // calculate how much fuel is burned per lap on average
   const burnPerLap = totalLaps > 0 ? fuelLoadKg / totalLaps : 0;
@@ -107,7 +107,7 @@ function calcLapTimeWithWear({
   const burnedKg = burnPerLap * (lapGlobal - 1);
   
   // calculate time gained from being lighter
-  const fuelGain = fuelAdvantageSecondsLinear(burnedKg, fuelPerKgBenefit);
+  const fuelGain = fuelAdvantage(burnedKg, fuelPerKgBenefit);
   
   // calculate time lost due to tyre wear
   const wearPenalty = tyreWearPenalty(compound, age, trackDegFactor, maxStintLap);
@@ -115,16 +115,18 @@ function calcLapTimeWithWear({
   // mark lap as invalid if the wear is too high
   const isTooSlow = wearPenalty > rejectThresholdSec;
   
-  // add extra time if this is the first lap on these tyres (out-lap)
+  // add extra time if this is the first lap on these tyres (outlap)
   const warmupPenalty = (age === 1) ? outLapPenalty : 0;
 
-  // sum all components, base time +/- compound diff + wear + warmup - fuel gain
-  const time = isTooSlow 
-    ? Number.POSITIVE_INFINITY
-    : baseLapTime + baseOffset + wearPenalty + warmupPenalty - fuelGain;
-    
+  // add all components, the base time + compound offset + wear + outlap - fuel benefit
+  let lapTime = baseLapTime + baseOffset + wearPenalty + warmupPenalty - fuelGain;
+
+  if (isTooSlow) {
+    lapTime = Number.POSITIVE_INFINITY; // makes the lap infinite to make it invalid and therefore won't be used
+  }
+
   return { 
-    time: time, 
+    time: lapTime, 
     wearPenalty: wearPenalty, 
     invalid: isTooSlow 
   };
@@ -133,7 +135,7 @@ function calcLapTimeWithWear({
 module.exports = {
   BASE_COMPOUNDS,
   WEAR_PARAMS,
-  getTrackDegFactor,
+  getEnvDegFactor,
   tyreWearPenalty,
   calcLapTimeWithWear,
 };

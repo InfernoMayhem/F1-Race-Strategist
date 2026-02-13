@@ -6,71 +6,93 @@ import { renderStrategyCards, setStrategyStatus } from './strategies.js';
 import { initConfigModalBindings } from './modal.js';
 import { setRaceSetupTitle, currentLoadedConfigName, isPopulatingForm, setCurrentLoadedConfigName } from './state.js';
 
-// helper function to manage the global loading spinner overlay
-function showLoading(text){
-  const overlay = document.getElementById('loadingOverlay');
-  const label = document.getElementById('loadingText');
-  if (label && text) label.textContent = text;
-  if (overlay) overlay.classList.remove('hidden');
+// Helper to control the visibility of the loading spinner
+function showLoadingSpinner(messageText){
+  const overlayElement = document.getElementById('loadingOverlay');
+  const messageElement = document.getElementById('loadingText');
+  
+  if (messageElement && messageText) {
+      messageElement.textContent = messageText;
+  }
+  
+  if (overlayElement) {
+      overlayElement.classList.remove('hidden');
+  }
 }
 
-function hideLoading(){
-  const overlay = document.getElementById('loadingOverlay');
-  if (overlay) overlay.classList.add('hidden');
+function hideLoadingSpinner(){
+  const overlayElement = document.getElementById('loadingOverlay');
+  if (overlayElement) {
+      overlayElement.classList.add('hidden');
+  }
 }
 
-// simple diagnostics check to verify backend connectivity
-const testBtn = $("testBtn");
-if (testBtn) {
-  testBtn.addEventListener("click", async () => {
-    const out = $("output");
-    if (out) out.textContent = "Testing…";
+// Check backend connectivity when the test button is clicked
+const connectionTestButton = $("testBtn");
+if (connectionTestButton) {
+  connectionTestButton.addEventListener("click", async () => {
+    const outputElement = $("output");
+    if (outputElement) outputElement.textContent = "Testing…";
+    
     try {
-      const res = await apiFetch("/api/hello");
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      if (out) out.textContent = data?.message || "OK";
-    } catch (e) {
-      console.error(e);
-      if (out) out.textContent = "Error connecting to backend.";
+      const response = await apiFetch("/api/hello");
+      if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const responseData = await response.json();
+      if (outputElement) {
+          outputElement.textContent = responseData?.message || "OK";
+      }
+    } catch (err) {
+      console.error(err);
+      if (outputElement) {
+          outputElement.textContent = "Error connecting to backend.";
+      }
     }
   });
 }
 
-// main application logic
-const form = $("raceForm");
-if (form) {
-  const validateField = (id) => validateOneField(id);
-  const validateAll = () => validateAllFields();
+// Main application logic initialization
+const raceConfigForm = $("raceForm");
+if (raceConfigForm) {
+  const validateFieldWrapper = (fieldId) => validateOneField(fieldId);
+  const validateAllWrapper = () => validateAllFields();
 
-  // listen for real-time input changes to validate fields immediately
-  form.addEventListener("input", (e) => {
-    const t = e.target;
-    if (t && t.id) validateField(t.id);
+  // Listen for real-time input changes to validate fields immediately
+  raceConfigForm.addEventListener("input", (event) => {
+    const targetElement = event.target;
+    if (targetElement && targetElement.id) {
+        validateFieldWrapper(targetElement.id);
+    }
     
-    // clear the title to indicate it's now a custom unsaved setup
+    // Reset the configuration title if the user modifies a loaded preset
+    // This indicates it's now a custom, unsaved setup
     if (!isPopulatingForm && currentLoadedConfigName) {
       setCurrentLoadedConfigName(null);
       setRaceSetupTitle();
     }
   });
   
-  // also check on change events
-  form.addEventListener("change", (e) => {
-    const t = e.target;
-    if (t && t.id) validateField(t.id);
+  // Also perform validation on 'change' events (e.g. for dropdowns)
+  raceConfigForm.addEventListener("change", (event) => {
+    const targetElement = event.target;
+    if (targetElement && targetElement.id) {
+        validateFieldWrapper(targetElement.id);
+    }
+    
     if (!isPopulatingForm && currentLoadedConfigName) {
       setCurrentLoadedConfigName(null);
       setRaceSetupTitle();
     }
   });
 
-  // display the raw lap time calculation results
-  const renderResults = (laps) => {
-    const results = $("resultsOutput");
-    if (!results) return;
+  // Display the raw lap time calculation results in the debug output area
+  const renderResultsOutput = (laps) => {
+    const resultsArea = $("resultsOutput");
+    if (!resultsArea) return;
     if (!Array.isArray(laps) || laps.length === 0) {
-      results.textContent = "No laps returned.";
+      resultsArea.textContent = "No laps returned.";
       return;
     }
     const n = laps.length;
@@ -81,7 +103,7 @@ if (form) {
     const preview = laps.slice(0, previewCount)
       .map((t, i) => `Lap ${i + 1}: ${t.toFixed(3)}s`).join("\n");
 
-    results.textContent = [
+    resultsArea.textContent = [
       `Total laps: ${n}`,
       `Min: ${min.toFixed(3)}s  Max: ${max.toFixed(3)}s  Avg: ${avg.toFixed(3)}s`,
       "",
@@ -116,7 +138,7 @@ if (form) {
   // fetch optimised strategies from the backend and display them
   async function fetchAndRenderStrategies(config) {
     setStrategyStatus('Optimising strategies…');
-    showLoading('Optimising strategies…');
+    showLoadingSpinner('Optimising strategies…');
     try {
       const res = await apiFetch('/api/generate-strategies', {
         method: 'POST',
@@ -145,17 +167,17 @@ if (form) {
       console.error('Failed to fetch strategies', err);
       setStrategyStatus('Failed to fetch strategies. Is the backend running?');
     } finally {
-      hideLoading();
+      hideLoadingSpinner();
     }
   }
 
 
   // main form submission handler, run simulation
-  form.addEventListener("submit", async (e) => {
+  raceConfigForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     
     // run full validation
-    const errors = validateAll();
+    const errors = validateAllWrapper();
     const hasErrors = Object.keys(errors).length > 0;
     const results = $("resultsOutput");
     
@@ -178,7 +200,7 @@ if (form) {
     };
 
     try {
-      showLoading('Saving and calculating…');
+      showLoadingSpinner('Saving and calculating…');
       
       // validate and normalise the config via the backend
       const res = await apiFetch("/api/race-config", {
@@ -204,7 +226,7 @@ if (form) {
       if (!calcRes.ok) throw new Error(`HTTP ${calcRes.status}`);
       const calcData = await calcRes.json();
       if (!calcData?.ok) throw new Error("Calculation failed");
-      renderResults(calcData.laps || []);
+      renderResultsOutput(calcData.laps || []);
 
       // generate optimised strategies
       await fetchAndRenderStrategies(window.raceConfig);
@@ -212,12 +234,18 @@ if (form) {
       console.error("Failed to save raceConfig", err);
       if (results) results.textContent = "Failed to save race configuration.";
     } finally {
-      hideLoading();
+      hideLoadingSpinner();
     }
   });
 }
 
 // initialise the modal system once the DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
+const init = () => {
   initConfigModalBindings();
-});
+};
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', init);
+} else {
+  init();
+}

@@ -137,15 +137,50 @@ export async function showSaveModal() {
 }
 
 // helper to format iso dates for display
-function fmtTime(t) { try { const d = new Date(t); return d.toLocaleString(); } catch (_) { return String(t); } }
+function fmtTime(t) { 
+  if (!t || isNaN(t)) return 'Unknown Date'; 
+  try { return new Date(Number(t)).toLocaleString(); } 
+  catch (_) { return String(t); } 
+}
 
 // fetches the list of saved configs and displays them in the modal
 export async function showLoadModal() {
+  console.log('showLoadModal triggered');
   const { modalBody, modalTitle } = getModalEls();
   if (!modalBody || !modalTitle) return;
   
   modalTitle.textContent = 'Load Configuration';
   modalBody.innerHTML = '';
+  
+  // Controls container for search and sort
+  const controls = document.createElement('div');
+  controls.className = 'modal-search-controls';
+  controls.style.cssText = 'display: flex; gap: 10px; margin-bottom: 10px; width: 100%;';
+  
+  // Search input
+  const searchInput = document.createElement('input');
+  searchInput.type = 'text';
+  searchInput.placeholder = 'Search...';
+  searchInput.style.cssText = 'flex: 1; padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff;';
+  
+  // Sort select
+  const sortSelect = document.createElement('select');
+  sortSelect.style.cssText = 'padding: 8px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff;';
+  
+  [
+    { val: 'date-desc', txt: 'Newest' },
+    { val: 'date-asc', txt: 'Oldest' },
+    { val: 'name-asc', txt: 'A-Z' },
+    { val: 'name-desc', txt: 'Z-A' }
+  ].forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt.val;
+    o.textContent = opt.txt;
+    sortSelect.append(o);
+  });
+  
+  controls.append(searchInput, sortSelect);
+  modalBody.append(controls);
   
   // container for the list items
   const list = document.createElement('div'); 
@@ -164,106 +199,159 @@ export async function showLoadModal() {
   
   close.addEventListener('click', closeModal);
   
+  // Linear search function: iterates through items to find matches
+  function linearSearch(items, query) {
+    if (!query) return items;
+    const lowerQuery = query.toLowerCase();
+    const result = [];
+    for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.name.toLowerCase().includes(lowerQuery)) {
+            result.push(item);
+        }
+    }
+    return result;
+  }
+
+  // Bubble sort function: sorts items based on selected criteria
+  function bubbleSort(items, criteria) {
+    const arr = [...items]; // Copy array to avoid mutating original
+    const n = arr.length;
+    for (let i = 0; i < n - 1; i++) {
+        for (let j = 0; j < n - i - 1; j++) {
+            let swap = false;
+            const a = arr[j];
+            const b = arr[j + 1];
+
+            if (criteria === 'date-desc') {
+                if (a.timestamp < b.timestamp) swap = true; // Newest first
+            } else if (criteria === 'date-asc') {
+                if (a.timestamp > b.timestamp) swap = true; // Oldest first
+            } else if (criteria === 'name-asc') {
+                if (a.name.toLowerCase() > b.name.toLowerCase()) swap = true; // A-Z
+            } else if (criteria === 'name-desc') {
+                if (a.name.toLowerCase() < b.name.toLowerCase()) swap = true; // Z-A
+            }
+
+            if (swap) {
+                const temp = arr[j];
+                arr[j] = arr[j + 1];
+                arr[j + 1] = temp;
+            }
+        }
+    }
+    return arr;
+  }
+
   try {
     // fetch saved items from API
     const res = await apiFetch('/api/configs');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const items = data.items || [];
+    let allItems = data.items || [];
     
-    // handle empty state
-    if (!items.length) {
-      const empty = document.createElement('div'); 
-      empty.className = 'empty-note'; 
-      empty.textContent = 'No saved configurations yet. Save one to see it here.';
-      list.append(empty);
-      return;
-    }
-    
-    // render each config item
-    items.forEach(item => {
-      const row = document.createElement('div'); 
-      row.className = 'config-item';
-      
-      const info = document.createElement('div'); 
-      info.className = 'config-info';
-      info.innerHTML = `<div class="name">${item.name}</div><div class="time">${fmtTime(item.createdAt)}</div>`;
-      
-      // create delete button with confirmation logic
-      const delBtn = document.createElement('button');
-      delBtn.className = 'delete-btn';
-      delBtn.innerHTML = '&times;';
-      delBtn.title = 'Delete';
-
-      row.append(info, delBtn);
-
-      // clicking the row loads the config
-      const loadConfig = async () => {
-        try {
-          const r = await apiFetch(`/api/configs/${encodeURIComponent(item.name)}`);
-          if (!r.ok) throw new Error(`HTTP ${r.status}`);
-          const payload = await r.json();
-          
-          const cfg = payload?.item?.config || {};
-          populateFormFromConfig(cfg);
-          
-          // update UI state to reflect loaded config
-          setRaceSetupTitle(item.name);
-          setCurrentLoadedConfigName(item.name);
-          
-          closeModal();
-        } catch (e) {
-          console.error('Load failed', e);
-          alert('Failed to load config.');
-        }
-      };
-
-      row.addEventListener('click', loadConfig);
-
-      // handle delete with click twice to confirm logic
-      delBtn.addEventListener('click', async (e) => {
-        e.stopPropagation(); // prevent triggering the row click
+    const renderList = () => {
+        list.innerHTML = '';
+        const query = searchInput.value;
+        const sortMode = sortSelect.value;
         
-        if (delBtn.classList.contains('confirm-state')) {
-          // second click, perform delete
-          try {
-            const res = await apiFetch(`/api/configs/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            
-            // remove from UI
-            row.remove();
-            
-            // check if list is now empty
-            if (list.children.length === 0) {
-              const empty = document.createElement('div'); 
-              empty.className = 'empty-note'; 
-              empty.textContent = 'No saved configurations yet.';
-              list.append(empty);
-            }
-          } catch (err) {
-            console.error('Delete failed', err);
-            alert('Failed to delete config.');
-            
-            // reset button state on failure
-            delBtn.classList.remove('confirm-state');
-            delBtn.innerHTML = '&times;';
-          }
-        } else {
-          // first click, show confirmation state
-          delBtn.classList.add('confirm-state');
-          delBtn.textContent = 'Confirm?';
-          
-          // auto-reset after 3 seconds if not confirmed
-          setTimeout(() => {
-            if (delBtn.isConnected && delBtn.classList.contains('confirm-state')) {
-              delBtn.classList.remove('confirm-state');
-              delBtn.innerHTML = '&times;';
-            }
-          }, 3000);
+        let filtered = linearSearch(allItems, query);
+        let sorted = bubbleSort(filtered, sortMode);
+
+        if (!sorted.length) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-note';
+            empty.textContent = query ? 'No matching configs found.' : 'No saved configurations yet.';
+            list.append(empty);
+            return;
         }
-      });
-      list.append(row);
-    });
+
+        sorted.forEach(item => {
+            const row = document.createElement('div'); 
+            row.className = 'config-item';
+            
+            const info = document.createElement('div'); 
+            info.className = 'config-info';
+            info.innerHTML = `<div class="name">${item.name}</div><div class="time">${fmtTime(item.timestamp)}</div>`; // use item.timestamp from backend
+            
+            // create delete button with confirmation logic
+            const delBtn = document.createElement('button');
+            delBtn.className = 'delete-btn';
+            delBtn.innerHTML = '&times;';
+            delBtn.title = 'Delete';
+    
+            row.append(info, delBtn);
+    
+            // clicking the row loads the config
+            const loadConfig = async () => {
+              try {
+                const r = await apiFetch(`/api/configs/${encodeURIComponent(item.name)}`);
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                const payload = await r.json();
+                
+                const cfg = payload?.item?.config || {};
+                populateFormFromConfig(cfg);
+                
+                // update UI state to reflect loaded config
+                setRaceSetupTitle(item.name);
+                setCurrentLoadedConfigName(item.name);
+                
+                closeModal();
+              } catch (e) {
+                console.error('Load failed', e);
+                alert('Failed to load config.');
+              }
+            };
+    
+            row.addEventListener('click', loadConfig);
+    
+            // handle delete with click twice to confirm logic
+            delBtn.addEventListener('click', async (e) => {
+              e.stopPropagation(); // prevent triggering the row click
+              
+              if (delBtn.classList.contains('confirm-state')) {
+                // second click, perform delete
+                try {
+                  const res = await apiFetch(`/api/configs/${encodeURIComponent(item.name)}`, { method: 'DELETE' });
+                  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                  
+                  // remove from local list and UI
+                  allItems = allItems.filter(i => i.name !== item.name);
+                  renderList();
+                  
+                } catch (err) {
+                  console.error('Delete failed', err);
+                  alert('Failed to delete config.');
+                  
+                  // reset button state on failure
+                  delBtn.classList.remove('confirm-state');
+                  delBtn.innerHTML = '&times;';
+                }
+              } else {
+                // first click, show confirmation state
+                delBtn.classList.add('confirm-state');
+                delBtn.textContent = 'Confirm?';
+                
+                // auto-reset after 3 seconds if not confirmed
+                setTimeout(() => {
+                  if (delBtn.isConnected && delBtn.classList.contains('confirm-state')) {
+                    delBtn.classList.remove('confirm-state');
+                    delBtn.innerHTML = '&times;';
+                  }
+                }, 3000);
+              }
+            });
+            list.append(row);
+        });
+    };
+
+    // Attach listeners
+    searchInput.addEventListener('input', renderList);
+    sortSelect.addEventListener('change', renderList);
+
+    // Initial render
+    renderList();
+
   } catch (e) {
     console.error('List failed', e);
     const div = document.createElement('div');
@@ -277,9 +365,19 @@ export async function showLoadModal() {
 
 // initialisation function to attach listeners to static buttons
 export function initConfigModalBindings() {
+  console.log('Initializing config modal bindings...');
   const saveBtn = document.getElementById('saveConfigBtn');
   const loadBtn = document.getElementById('loadConfigBtn');
   const { modal, modalClose } = getModalEls();
+  
+  if (saveBtn) console.log('Found saveConfigBtn');
+  else console.error('saveConfigBtn NOT found');
+
+  if (loadBtn) console.log('Found loadConfigBtn');
+  else console.error('loadConfigBtn NOT found');
+
+  if (modal) console.log('Found modal');
+  else console.error('configModal NOT found');
   
   if (modalClose) modalClose.addEventListener('click', closeModal);
   

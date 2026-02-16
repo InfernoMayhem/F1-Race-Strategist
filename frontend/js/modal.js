@@ -2,7 +2,7 @@ import { apiFetch } from './api.js';
 import { validateAll } from './validation.js';
 import { setRaceSetupTitle, setCurrentLoadedConfigName, setIsPopulatingForm } from './state.js';
 
-// retrieval utility to grab all modal-related dom elements at once
+// helper function to get all relevant modal elements to make future function easier
 export function getModalEls(){
   return {
     modal: document.getElementById('configModal'),
@@ -16,27 +16,37 @@ export function getModalEls(){
 export function openModal() { const { modal } = getModalEls(); if (modal) modal.classList.remove('hidden'); }
 export function closeModal() { const { modal } = getModalEls(); if (modal) modal.classList.add('hidden'); }
 
-// reads the current form values and packages them into a configuration object to save the current setup
+// turns the form values into a config object which can be used by the backend
 export function buildCurrentConfigFromForm() {
   const f = document.getElementById('raceForm');
   if (!f) return null;
+  const totalLaps = document.getElementById('totalLaps')?.value;
+  const trackLength = document.getElementById('trackLength')?.value;
+  const fuelLoad = document.getElementById('fuelLoad')?.value;
+  const degradation = document.getElementById('degradation')?.value;
+  const totalRainfall = document.getElementById('totalRainfall')?.value;
+  const temperature = document.getElementById('temperature')?.value;
+  const baseLapTime = document.getElementById('baseLapTime')?.value;
+  const pitStopLoss = document.getElementById('pitStopLoss')?.value;
+
   return {
-    totalLaps: document.getElementById('totalLaps')?.value,
-    trackLength: document.getElementById('trackLength')?.value,
-    fuelLoad: document.getElementById('fuelLoad')?.value,
-    degradation: document.getElementById('degradation')?.value,
-    totalRainfall: document.getElementById('totalRainfall')?.value,
-    temperature: document.getElementById('temperature')?.value,
-    baseLapTime: document.getElementById('baseLapTime')?.value,
-    pitStopLoss: document.getElementById('pitStopLoss')?.value,
+    totalLaps,
+    trackLength,
+    fuelLoad,
+    degradation,
+    totalRainfall,
+    temperature,
+    baseLapTime,
+    pitStopLoss,
   };
 }
 
-// takes a loaded config object and fills the html form inputs with those values
+// takes the loaded config object and fills the html form inputs with those values
 export function populateFormFromConfig(cfg = {}) {
-  // signal that we are currently populating the form to prevent early simulation
+  // makes sure that simulation isn't triggered when the form is still being entered
   setIsPopulatingForm(true);
   
+  // helper to prevent code being repeated
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
   
   set('totalLaps', cfg.totalLaps);
@@ -52,22 +62,22 @@ export function populateFormFromConfig(cfg = {}) {
   setTimeout(() => { setIsPopulatingForm(false); }, 0);
 }
 
-// builds and displays the save configuration modal content
+// function to build the modal UI for config saving
 export async function showSaveModal() {
   const { modalBody, modalTitle } = getModalEls();
   if (!modalBody || !modalTitle) return;
   
-  // prepare the modal for save mode
+  // save button
   modalTitle.textContent = 'Save Configuration';
   modalBody.innerHTML = '';
   
-  // create the name input field
+  // name input field
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'Enter a name for this config (e.g. Monza Dry)';
   input.id = 'saveNameInput';
   
-  // create the action buttons
+  // buttons
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
   
@@ -82,11 +92,11 @@ export async function showSaveModal() {
   actions.append(cancel, save);
   modalBody.append(input, actions);
 
-  // add event listeners
+  // event listeners
   cancel.addEventListener('click', closeModal);
   
   save.addEventListener('click', async () => {
-    // validate all fields before allowing a save
+    // validate fields before saving
     const errors = validateAll();
     if (Object.keys(errors).length > 0) {
       alert('Cannot save: The race configuration has invalid fields. Please correct them and try again.');
@@ -94,7 +104,7 @@ export async function showSaveModal() {
       return;
     }
 
-    // check if the user provided a name
+    // name input validation
     const name = (document.getElementById('saveNameInput')?.value || '').trim();
     if (!name) { 
       input.focus(); 
@@ -106,7 +116,7 @@ export async function showSaveModal() {
     const config = buildCurrentConfigFromForm();
     
     try {
-      // send to the backend
+      // send to backend
       const res = await apiFetch('/api/configs', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
@@ -199,7 +209,7 @@ export async function showLoadModal() {
   
   close.addEventListener('click', closeModal);
   
-  // Linear search function: iterates through items to find matches
+  // linear search function
   function linearSearch(items, query) {
     if (!query) return items;
     const lowerQuery = query.toLowerCase();
@@ -212,35 +222,41 @@ export async function showLoadModal() {
     }
     return result;
   }
+  
+  // quick sort function
+  function quickSort(items, criteria) {
+    if (items.length <= 1) return items;
 
-  // Bubble sort function: sorts items based on selected criteria
-  function bubbleSort(items, criteria) {
-    const arr = [...items]; // Copy array to avoid mutating original
-    const n = arr.length;
-    for (let i = 0; i < n - 1; i++) {
-        for (let j = 0; j < n - i - 1; j++) {
-            let swap = false;
-            const a = arr[j];
-            const b = arr[j + 1];
+    const pivot = items[items.length - 1];
+    const left = [];
+    const right = [];
 
-            if (criteria === 'date-desc') {
-                if (a.timestamp < b.timestamp) swap = true; // Newest first
-            } else if (criteria === 'date-asc') {
-                if (a.timestamp > b.timestamp) swap = true; // Oldest first
-            } else if (criteria === 'name-asc') {
-                if (a.name.toLowerCase() > b.name.toLowerCase()) swap = true; // A-Z
-            } else if (criteria === 'name-desc') {
-                if (a.name.toLowerCase() < b.name.toLowerCase()) swap = true; // Z-A
-            }
+    for (let i = 0; i < items.length - 1; i++) {
+        const item = items[i];
+        let comparison = 0;
 
-            if (swap) {
-                const temp = arr[j];
-                arr[j] = arr[j + 1];
-                arr[j + 1] = temp;
-            }
+        if (criteria === 'date-desc') {
+             // newest first
+            comparison = item.timestamp - pivot.timestamp;
+            if (comparison > 0) left.push(item);
+            else right.push(item);
+        } else if (criteria === 'date-asc') {
+            // oldest first
+            comparison = item.timestamp - pivot.timestamp;
+            if (comparison < 0) left.push(item);
+            else right.push(item);
+        } else if (criteria === 'name-asc') {
+            // A-Z
+            if (item.name.toLowerCase() < pivot.name.toLowerCase()) left.push(item);
+            else right.push(item);
+        } else if (criteria === 'name-desc') {
+            // Z-A
+            if (item.name.toLowerCase() > pivot.name.toLowerCase()) left.push(item);
+            else right.push(item);
         }
     }
-    return arr;
+
+    return [...quickSort(left, criteria), pivot, ...quickSort(right, criteria)];
   }
 
   try {
@@ -256,7 +272,7 @@ export async function showLoadModal() {
         const sortMode = sortSelect.value;
         
         let filtered = linearSearch(allItems, query);
-        let sorted = bubbleSort(filtered, sortMode);
+        let sorted = quickSort(filtered, sortMode);
 
         if (!sorted.length) {
             const empty = document.createElement('div');

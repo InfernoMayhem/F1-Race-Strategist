@@ -2,29 +2,30 @@
 
 // base offset values for each tyre compound - the speed difference between the different tyre compounds when they are fresh
 const BASE_COMPOUNDS = {
-  Soft: { baseOffset: -0.75 },
+  Soft:   { baseOffset: -0.75 },
   Medium: { baseOffset:  0.0 },
-  Hard: { baseOffset:  0.25 },
+  Hard:   { baseOffset:  0.25 },
   Intermediate: { baseOffset: 2.0 },
   Wet: { baseOffset: 5.0 },
 };
 
 // wear parameters for each compound to control how they degrade over laps
 const WEAR_PARAMS = {
-  Soft: { linear: 0.08, wearStart: 6,  beta: 0.10, gamma: 0.20, cliffStart: 16, cliffBeta: 0.20, cliffGamma: 0.25 },
+  Soft:   { linear: 0.08, wearStart: 6,  beta: 0.10, gamma: 0.20, cliffStart: 16, cliffBeta: 0.20, cliffGamma: 0.25 },
   Medium: { linear: 0.05, wearStart: 10, beta: 0.08, gamma: 0.18, cliffStart: 24, cliffBeta: 0.14, cliffGamma: 0.22 },
-  Hard: { linear: 0.025, wearStart: 16, beta: 0.05, gamma: 0.15, cliffStart: 38, cliffBeta: 0.08, cliffGamma: 0.18 },
+  Hard:   { linear: 0.025, wearStart: 16, beta: 0.05, gamma: 0.15, cliffStart: 38, cliffBeta: 0.08, cliffGamma: 0.18 },
   Intermediate: { linear: 0.06, wearStart: 8,  beta: 0.08, gamma: 0.18, cliffStart: 20, cliffBeta: 0.14, cliffGamma: 0.22 },
   Wet: { linear: 0.03, wearStart: 12, beta: 0.05, gamma: 0.14, cliffStart: 28, cliffBeta: 0.10, cliffGamma: 0.18 },
 };
 
 // calculate a multiplier from the eninvironment based on track conditions and temperature
 function getEnvDegFactor(config) {
+  if (!config) return 1.0;
   // standardise the degradation variable so it always is accepted
-  let degLevel = (config.degradation).toLowerCase();
+  let degLevel = (config.degradation || 'Medium').toLowerCase();
   
   // get the temperature
-  let temperature = config.temperature
+  let temperature = Number(config.temperature) || 20;
   
   // set the initial factor based on the degradation category
   let factor = 1.0;
@@ -135,7 +136,7 @@ function calcLapTimeWithWear({
 module.exports = {
   BASE_COMPOUNDS,
   WEAR_PARAMS,
-  getEnvDegFactor,
+  getTrackDegFactor: getEnvDegFactor,
   tyreWearPenalty,
   calcLapTimeWithWear,
 };

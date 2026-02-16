@@ -14,7 +14,8 @@ function getTyreInfo(compound) {
   const wear = WEAR_PARAMS[key] || WEAR_PARAMS.Medium;
 
   // calculate the maximum laps before the tyre hits the cliff performance drop-off
-  const maxUsefulLaps = wear.cliffStart + 2; 
+  // Increased buffer to allow slightly longer stints if needed
+  const maxUsefulLaps = wear.cliffStart + 5; 
 
   return {
     key,
@@ -32,6 +33,8 @@ const MIN_STINT = 3;
 function calculateLapTime(lapNumber, stintLap, compound, params, currentFuelKg) {
   const info = getTyreInfo(compound);
   
+  if (!info) return Infinity; // Safety check
+
   const { time, invalid } = calcLapTimeWithWear({
     compound: info.key,
     age: stintLap,
@@ -42,8 +45,9 @@ function calculateLapTime(lapNumber, stintLap, compound, params, currentFuelKg) 
     fuelLoadKg: currentFuelKg,
     fuelPerKgBenefit: fuelPerKgBenefit,
     trackDegFactor: Number(params.trackDegFactor) || 1.0,
-    maxStintLap: info.maxUsefulLaps + 10,
+    maxStintLap: Number(info.maxUsefulLaps) || 40, // Ensure strictly number
     rejectThresholdSec: 999, // invalid laps higher up
+    outLapPenalty: Number(params.outLapPenalty) || 0,
   });
 
   return time;
@@ -526,21 +530,33 @@ function optimiseForStopCount(params, stopCount, allowedCompounds) {
       }
   }
 
-  // find the best overall time that satisfies the diverse compound rule
+  // find the best overall time that satisfies the diverse compound rule (or uniform if wet/inter)
   let bestTime = Infinity;
   let bestEndState = null;
   let bestFinalComp = null;
+  let bestType = null;
   
   const finalStates = dp[numStints][totalLaps];
   
   if (finalStates) {
       for (const comp in finalStates) {
           const entry = finalStates[comp];
-          if (entry && entry.diverse) {
-              if (entry.diverse.cost < bestTime) {
-                  bestTime = entry.diverse.cost;
-                  bestEndState = entry.diverse;
+          if (!entry) continue;
+
+          // Check if this compound is a wet/inter compound, which allows uniform strategies
+          const isWet = comp === 'Intermediate' || comp === 'Wet';
+          
+          // Strategies to consider: diverse is always valid. Uniform is valid only if wet.
+          const candidates = [];
+          if (entry.diverse) candidates.push({ ...entry.diverse, type: 'diverse' });
+          if (entry.uniform && isWet) candidates.push({ ...entry.uniform, type: 'uniform' });
+
+          for (const cand of candidates) {
+              if (cand.cost < bestTime) {
+                  bestTime = cand.cost;
+                  bestEndState = cand;
                   bestFinalComp = comp;
+                  bestType = cand.type;
               }
           }
       }
@@ -554,7 +570,7 @@ function optimiseForStopCount(params, stopCount, allowedCompounds) {
   
   let currStep = { ...bestEndState };
   let currComp = bestFinalComp;
-  let currType = 'diverse'; 
+  let currType = bestType; 
   let currEnd = totalLaps;
   
   for (let k = numStints; k >= 1; k--) {
@@ -603,6 +619,12 @@ function optimiseForStopCount(params, stopCount, allowedCompounds) {
 // main entry point, calculate best strategies for 1, 2, and 3 stops
 function generateStrictStrategies(config) {
   const totalLaps = parseInt(config.totalLaps, 10);
+  if (!Number.isFinite(totalLaps) || totalLaps <= 0) {
+      // If totalLaps is invalid, we can't generate strategies.
+      // Return empty result rather than crashing or weird behaviour.
+      return { best: {}, overallBest: null, meta: { error: "Invalid totalLaps" } };
+  }
+
   const totalRain = Number(config.totalRainfall) || 0;
   const avgRainPerLap = totalRain / Math.max(1, totalLaps);
 
@@ -629,12 +651,22 @@ function generateStrictStrategies(config) {
   for (const stopCount of [1, 2, 3]) {
     let strictResult = null;
     try {
-      strictResult = optimiseForStopCount(params, stopCount, allowedCompounds);
+      const dpParams = {
+        totalLaps: totalLaps,
+        baseLapTime: Number(config.baseLapTime) || 0,
+        pitStopLoss: Number(config.pitStopLoss) || 0,
+        initialFuel: Number(config.fuelLoad) || 0,
+        fuelPerKgBenefit,
+        trackDegFactor: getTrackDegFactor(config),
+        outLapPenalty: Number(config.outLapPenalty) || 0,
+      };
+      
+      strictResult = optimiseForStopCount(dpParams, stopCount, allowedCompounds);
     } catch (err) {
-      strictResult = null;
+      // Just continue if optimal strategy not found for specific stop count
     }
     if (!strictResult) continue;
-    
+
     strictResult.pitLaps = strictResult.stints.slice(0, -1).map(s => s.to);
   
     // fill the result with full details
@@ -661,7 +693,8 @@ function generateStrictStrategies(config) {
 
 
 function generateStrategies(config, options = {}) {
-    return generateStrictStrategies(config);
+    const strictResult = generateStrictStrategies(config);
+    return strictResult;
 }
 
 module.exports = {

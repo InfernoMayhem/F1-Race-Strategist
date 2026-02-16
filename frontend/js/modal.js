@@ -2,7 +2,7 @@ import { apiFetch } from './api.js';
 import { validateAll } from './validation.js';
 import { setRaceSetupTitle, setCurrentLoadedConfigName, setIsPopulatingForm } from './state.js';
 
-// helper function to get all relevant modal elements to make future function easier
+// retrieval utility to grab all modal-related dom elements at once
 export function getModalEls(){
   return {
     modal: document.getElementById('configModal'),
@@ -16,7 +16,7 @@ export function getModalEls(){
 export function openModal() { const { modal } = getModalEls(); if (modal) modal.classList.remove('hidden'); }
 export function closeModal() { const { modal } = getModalEls(); if (modal) modal.classList.add('hidden'); }
 
-// turns the form values into a config object which can be used by the backend
+// reads the current form values and packages them into a configuration object to save the current setup
 export function buildCurrentConfigFromForm() {
   const f = document.getElementById('raceForm');
   if (!f) return null;
@@ -43,10 +43,9 @@ export function buildCurrentConfigFromForm() {
 
 // takes the loaded config object and fills the html form inputs with those values
 export function populateFormFromConfig(cfg = {}) {
-  // makes sure that simulation isn't triggered when the form is still being entered
+  // signal that we are currently populating the form to prevent early simulation
   setIsPopulatingForm(true);
   
-  // helper to prevent code being repeated
   const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ''; };
   
   set('totalLaps', cfg.totalLaps);
@@ -62,22 +61,22 @@ export function populateFormFromConfig(cfg = {}) {
   setTimeout(() => { setIsPopulatingForm(false); }, 0);
 }
 
-// function to build the modal UI for config saving
+// builds and displays the save configuration modal content
 export async function showSaveModal() {
   const { modalBody, modalTitle } = getModalEls();
   if (!modalBody || !modalTitle) return;
   
-  // save button
+  // prepare the modal for save mode
   modalTitle.textContent = 'Save Configuration';
   modalBody.innerHTML = '';
   
-  // name input field
+  // create the name input field
   const input = document.createElement('input');
   input.type = 'text';
   input.placeholder = 'Enter a name for this config (e.g. Monza Dry)';
   input.id = 'saveNameInput';
   
-  // buttons
+  // create the action buttons
   const actions = document.createElement('div');
   actions.className = 'modal-actions';
   
@@ -92,11 +91,11 @@ export async function showSaveModal() {
   actions.append(cancel, save);
   modalBody.append(input, actions);
 
-  // event listeners
+  // add event listeners
   cancel.addEventListener('click', closeModal);
   
   save.addEventListener('click', async () => {
-    // validate fields before saving
+    // validate all fields before allowing a save
     const errors = validateAll();
     if (Object.keys(errors).length > 0) {
       alert('Cannot save: The race configuration has invalid fields. Please correct them and try again.');
@@ -104,7 +103,7 @@ export async function showSaveModal() {
       return;
     }
 
-    // name input validation
+    // check if the user provided a name
     const name = (document.getElementById('saveNameInput')?.value || '').trim();
     if (!name) { 
       input.focus(); 
@@ -116,7 +115,7 @@ export async function showSaveModal() {
     const config = buildCurrentConfigFromForm();
     
     try {
-      // send to backend
+      // send to the backend
       const res = await apiFetch('/api/configs', { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
@@ -209,7 +208,7 @@ export async function showLoadModal() {
   
   close.addEventListener('click', closeModal);
   
-  // linear search function
+  // linear search function: iterates through items to find matches
   function linearSearch(items, query) {
     if (!query) return items;
     const lowerQuery = query.toLowerCase();
@@ -222,7 +221,7 @@ export async function showLoadModal() {
     }
     return result;
   }
-  
+
   // quick sort function
   function quickSort(items, criteria) {
     if (items.length <= 1) return items;
@@ -246,11 +245,11 @@ export async function showLoadModal() {
             if (comparison < 0) left.push(item);
             else right.push(item);
         } else if (criteria === 'name-asc') {
-            // A-Z
+            // a-z
             if (item.name.toLowerCase() < pivot.name.toLowerCase()) left.push(item);
             else right.push(item);
         } else if (criteria === 'name-desc') {
-            // Z-A
+            // z-a
             if (item.name.toLowerCase() > pivot.name.toLowerCase()) left.push(item);
             else right.push(item);
         }
